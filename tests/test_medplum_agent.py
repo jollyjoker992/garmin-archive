@@ -8,7 +8,10 @@ import sys
 import unittest
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "tools"))
+TOOLS = Path(__file__).resolve().parent.parent / "tools"
+if not (TOOLS / "medplum_agent.py").is_file():          # e.g. inside the Docker image, which has no tools/
+    raise unittest.SkipTest("tools/medplum_agent.py is not present")
+sys.path.insert(0, str(TOOLS))
 import medplum_agent as ma  # noqa: E402
 
 UTC = dt.timezone.utc
