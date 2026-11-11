@@ -159,6 +159,7 @@ class Config:
     rate_limit_cooldowns: int
     timeout: float
     max_days_per_run: int
+    include_today: bool
     skip_endpoints: set[str]
     gdrive_remote: str
     s3_remote: str
@@ -192,6 +193,7 @@ class Config:
             rate_limit_cooldowns=_env_num("GARMIN_RATE_LIMIT_COOLDOWNS", 4, int),
             timeout=_env_num("GARMIN_TIMEOUT", 30.0),
             max_days_per_run=_env_num("GARMIN_MAX_DAYS_PER_RUN", 0, int),
+            include_today=_env("GARMIN_INCLUDE_TODAY", "false").lower() in ("1", "true", "yes"),
             skip_endpoints=skip,
             gdrive_remote=_env("GARMIN_GDRIVE_REMOTE").rstrip("/"),
             s3_remote=_env("GARMIN_S3_REMOTE").rstrip("/"),
@@ -326,10 +328,13 @@ class Client:
             )
 
         status, body = self._send(build, "token exchange", auth=False)
-        if status in (401, 403):
+        if status in (401, 403, 404):
+            # 404 is what Garmin answers for a deleted key ("Personal API Key with ID ... does not exist").
+            detail = body.decode(errors="replace").strip()[:200]
             raise AuthError(
-                f"Garmin rejected the Personal API key (HTTP {status}). It is wrong, deleted or expired; "
-                "create a new key on Garmin Connect and update GARMIN_PERSONAL_API_KEY."
+                f"Garmin rejected the Personal API key (HTTP {status}{': ' + detail if detail else ''}). "
+                "It is wrong, deleted or expired; create a new key on Garmin Connect and update "
+                "GARMIN_PERSONAL_API_KEY."
             )
         if status != 200 or not body.strip():
             raise FetchError(f"token exchange returned HTTP {status}")
@@ -453,8 +458,9 @@ def date_range(start: dt.date, end: dt.date) -> list[str]:
 
 
 def is_settled(cfg: Config, day: str) -> bool:
-    """A day is settled once it is at least ``settle_days`` in the past."""
-    return (cfg.today - dt.date.fromisoformat(day)).days >= cfg.settle_days
+    """A day is settled once it is at least ``settle_days`` in the past. Today is never settled."""
+    age = (cfg.today - dt.date.fromisoformat(day)).days
+    return age >= max(cfg.settle_days, 1)
 
 
 def plan_days(cfg: Config, manifest: dict, start: dt.date, end: dt.date, refetch: set[str]) -> list[str]:
@@ -1019,9 +1025,11 @@ def cmd_status(cfg: Config, args) -> int:
 
 def resolve_range(cfg: Config, args) -> tuple[dt.date, dt.date]:
     start = parse_date(args.start, "--from") if args.start else cfg.start_date
-    end = parse_date(args.end, "--to") if args.end else cfg.today - dt.timedelta(days=1)
-    if end >= cfg.today:
-        raise ConfigError("--to must be before today; today's data is still incomplete")
+    last = cfg.today if cfg.include_today else cfg.today - dt.timedelta(days=1)
+    end = parse_date(args.end, "--to") if args.end else last
+    if end > last:
+        raise ConfigError("--to must be before today (today is still incomplete); "
+                          "set GARMIN_INCLUDE_TODAY=true to fetch today as provisional")
     if start > end:
         raise ConfigError(f"start date {start} is after end date {end}")
     return start, end
@@ -1030,8 +1038,9 @@ def resolve_range(cfg: Config, args) -> tuple[dt.date, dt.date]:
 def cmd_run(cfg: Config, args) -> int:
     start, end = resolve_range(cfg, args)
     refetch = {parse_date(d, "--refetch").isoformat() for d in args.refetch}
-    if any(d >= cfg.today.isoformat() for d in refetch):
-        raise ConfigError("--refetch dates must be before today")
+    latest = cfg.today if cfg.include_today else cfg.today - dt.timedelta(days=1)
+    if any(d > latest.isoformat() for d in refetch):
+        raise ConfigError(f"--refetch dates must be on or before {latest}")
     manifest = load_manifest(cfg)
     sync_failures = 0
     if not args.dry_run and cfg.targets():

@@ -44,6 +44,9 @@ client or the admin login to read data.
 4. **HRV is RMSSD**, compared against the person's own baseline
    (`referenceRange` and the `hrv-baseline-*` components), not population norms.
 5. **The last two days may still change** (sync delays); say so when they matter.
+   With `GARMIN_INCLUDE_TODAY=true`, today is present too but partial: its
+   sleep (last night) is usually complete, its steps, stress and calories are
+   not.
 6. **Ask for enough rows.** Lists default to a small page; always pass
    `_count: 1000` and page with `_offset` for longer ranges.
 7. **Not medical advice.** Describe patterns and how they compare with the

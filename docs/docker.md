@@ -59,6 +59,13 @@ in `GARMIN_TZ` (an IANA zone such as `Asia/Bangkok`; default `UTC`). Put these i
 (Compose reads it for the variables in `docker-compose.yml`) or export them in
 the shell.
 
+Sleep is dated by the morning it ends, and the crawler normally stops at
+yesterday, so last night's sleep would arrive a day later. For it the same
+morning, set `GARMIN_INCLUDE_TODAY=true` and schedule a morning run, for
+example `GARMIN_SCHEDULE_TIME=07:00,22:00`: the 07:00 run fetches last night's
+sleep, the 22:00 run fills in the rest of the day. Today stays provisional
+(local and in Medplum only) and is uploaded once settled.
+
 Each run is `run-daily.sh`: crawl, archive, upload (one batched rclone call per
 target), map, load. The exit code is logged and saved in
 `data/scheduler-status.json` (`last_exit_code`, `last_result`, `next_run`).

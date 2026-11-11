@@ -56,7 +56,8 @@ To enable uploads, install rclone, create the two remotes
    record whose file is missing there, so it is uploaded again. A target without
    a manifest yet leaves the local manifest as it is; a target that cannot be
    read is logged and the run exits with code 1.
-1. **Plan.** Lists every day from `GARMIN_START_DATE` to yesterday and keeps the
+1. **Plan.** Lists every day from `GARMIN_START_DATE` to yesterday (to today with
+   `GARMIN_INCLUDE_TODAY=true`) and keeps the
    ones that are not `final` in the manifest: never fetched, failed, or
    provisional. Newest days go first.
 2. **Crawl.** For each day, calls every endpoint and writes the responses to
@@ -122,6 +123,7 @@ All settings are environment variables. A `.env` file next to the script (or
 | `GARMIN_S3_REMOTE` | unset | rclone destination, for example `s3garmin:my-bucket/garmin`. |
 | `GARMIN_S3_STORAGE_CLASS` | `GLACIER` | Storage class for archives on S3. |
 | `GARMIN_SETTLE_DAYS` | `2` | Age in days at which a crawled day is final. |
+| `GARMIN_INCLUDE_TODAY` | `false` | Also fetch today, as provisional. Gives last night's sleep, HRV and Body Battery the same morning (Garmin dates sleep by the morning it ends). Today is never final, archived or uploaded. |
 | `GARMIN_MIN_INTERVAL` | `1.0` | Minimum seconds between requests (up to 25% jitter is added). |
 | `GARMIN_MAX_ATTEMPTS` | `5` | Attempts per request. |
 | `GARMIN_BACKOFF_BASE` | `2` | Delay before the first retry, in seconds. Doubles each attempt. |

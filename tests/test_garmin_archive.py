@@ -184,10 +184,30 @@ class RunTests(Base):
         self.assertEqual(entry["status"], "provisional")
         self.assertNotIn("archive", entry)
 
+    def test_today_is_excluded_by_default(self):
+        today = dt.date.today().isoformat()
+        self.assertEqual(self.run_cli("run", "--to", today), 2)       # refused without the setting
+        yesterday = (dt.date.today() - dt.timedelta(days=1)).isoformat()
+        self.assertEqual(self.run_cli("run", "--from", yesterday), 0)
+        self.assertNotIn(today, self.manifest()["days"])
+
+    def test_include_today_crawls_today_as_provisional(self):
+        os.environ.update(GARMIN_INCLUDE_TODAY="true", GARMIN_SETTLE_DAYS="0")   # even with no settle time
+        today = dt.date.today().isoformat()
+        self.assertEqual(self.run_cli("run", "--from", today), 0)
+        entry = self.manifest()["days"][today]
+        self.assertEqual(entry["status"], "provisional")             # today is never final
+        self.assertNotIn("archive", entry)                           # so never archived or uploaded
+        self.assertEqual(self.run_cli("run", "--from", today, "--refetch", today), 0)
+        self.assertEqual(self.manifest()["days"][today]["attempts"], 2)
+
     def test_rejected_key_exits_2(self):
-        StubGarmin.token_status = 401
-        self.assertEqual(self.run_cli("run", "--from", "2026-01-01", "--to", "2026-01-01"), 2)
-        self.assertIn("rejected the Personal API key", self.manifest()["last_run"]["error"])
+        for status in (401, 403, 404):                   # 404 = key deleted on Garmin Connect
+            with self.subTest(status=status):
+                StubGarmin.token_status = status
+                (Path(self.tmp.name) / ".token.json").unlink(missing_ok=True)
+                self.assertEqual(self.run_cli("run", "--from", "2026-01-01", "--to", "2026-01-01"), 2)
+                self.assertIn(f"rejected the Personal API key (HTTP {status}", self.manifest()["last_run"]["error"])
 
     def test_refetch_replaces_archive(self):
         self.run_cli("run", "--from", "2026-01-01", "--to", "2026-01-01")
