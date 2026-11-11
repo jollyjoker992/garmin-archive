@@ -91,7 +91,7 @@ Look up a custom code with
 
 To analyse the data, follow `.claude/skills/garmin-health-analysis/SKILL.md`
 and use `python3 tools/medplum_agent.py` (read-only: `graphql`, `codes`,
-`token`). MCP setup for Claude Code (`.mcp.json`) is in `docs/agents.md`.
+`token`, and `fit` for second-by-second workout data from the FIT files). MCP setup for Claude Code (`.mcp.json`) is in `docs/agents.md`.
 
 Date searches must carry the account's UTC offset, e.g.
 `date=ge2026-11-07T00:00:00%2B07:00` for UTC+7 (read it from any

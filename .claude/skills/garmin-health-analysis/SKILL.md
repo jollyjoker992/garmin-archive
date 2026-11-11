@@ -1,6 +1,6 @@
 ---
 name: garmin-health-analysis
-description: Analyse the owner's Garmin health and training data stored in the local Medplum FHIR server (sleep, HRV, resting heart rate, stress, Body Battery, steps, SpO2, respiration, weight, workouts) with read-only GraphQL or the Medplum MCP. Use for questions like "how did I sleep this month", "is my HRV trending down", "compare training load and recovery", "summarise last week", or any trend, comparison or correlation over the Garmin data.
+description: Analyse the owner's Garmin health and training data stored in the local Medplum FHIR server (sleep, HRV, resting heart rate, stress, Body Battery, steps, SpO2, respiration, weight, workouts, and second-by-second workout data from FIT files: heart rate, pace, power, cadence, running dynamics, GPS) with read-only GraphQL, the Medplum MCP and the FIT decoder. Use for questions like "how did I sleep this month", "is my HRV trending down", "compare training load and recovery", "summarise last week", or any trend, comparison or correlation over the Garmin data.
 ---
 
 # Garmin health analysis (Medplum, read-only)
@@ -77,7 +77,7 @@ One Observation per metric per day unless noted. `value` is `valueQuantity.value
 | HRV readings | `hrv-rmssd-readings`, `valueSampledData` | ms every 300 s | |
 | Weight / BMI | `29463-7` / `39156-5` (LOINC), `effectiveDateTime` | kg / kg/m2 | |
 | Fitness age | `fitness-age` | years | `fitness-age-achievable` |
-| Workouts | `55411-3` (LOINC) Exercise duration, one per workout | min | `73985-4` type (text), `55425-3` avg HR, `55426-1` max HR, `55424-6` kcal, `workout-distance`, `workout-avg-speed`, `workout-avg-power`, `workout-aerobic-training-effect`, `workout-training-load`, `workout-hr-zone-N-time`, ... |
+| Workouts (totals; per-second detail: section 6) | `55411-3` (LOINC) Exercise duration, one per workout | min | `73985-4` type (text), `55425-3` avg HR, `55426-1` max HR, `55424-6` kcal, `workout-distance`, `workout-avg-speed`, `workout-avg-power`, `workout-aerobic-training-effect`, `workout-training-load`, `workout-hr-zone-N-time`, ... |
 
 Code systems: LOINC = `http://loinc.org`; custom =
 `https://github.com/jollyjoker992/garmin-archive/fhir/CodeSystem/garmin-metrics`
@@ -143,7 +143,48 @@ c = {x["code"]["coding"][0]["code"]: (x.get("valueQuantity") or {}).get("value")
      or (x.get("valueCodeableConcept") or {}).get("text") for x in obs["component"]}
 ```
 
-## 6. How to answer
+## 6. Inside a workout: second-by-second data from the FIT file
+
+The workout Observation (`55411-3`) holds only totals and averages. Anything
+*within* a workout needs the FIT file: heart-rate drift, pace or power per
+kilometre, cadence against speed, time in zones over the course of the run,
+recovery between intervals, elevation profile, the GPS route. Medplum stores
+each workout's FIT archive as a `Binary`, linked from the Observation through
+`derivedFrom` → `DocumentReference`; it does not parse it (FHIR has no type
+for per-second tracks), so download and decode it:
+
+```sh
+python3 tools/medplum_agent.py fit list --from 2026-09-01T00:00:00+07:00   # workouts, ids, has FIT file
+python3 tools/medplum_agent.py fit records <activity> --no-gps > run.csv     # one row per second
+python3 tools/medplum_agent.py fit records <activity> --every 60 --format json --no-gps   # one row per minute
+python3 tools/medplum_agent.py fit laps <activity>                           # per lap (auto-lap is usually 1 km)
+python3 tools/medplum_agent.py fit messages <activity>                       # what else the file contains
+```
+
+- `<activity>` is the Garmin activity id, as `fit list` prints it (also the
+  part after `activity/` in the Observation identifier).
+- The decoder is Garmin's official FIT SDK, an **optional** dependency. If the
+  command says it is missing, tell the person to run
+  `python3 -m pip install garmin-fit-sdk` (installing it means accepting
+  Garmin's FIT Protocol License); do not install it for them without asking.
+- `records` columns (only those the file has): `time` (local, with offset),
+  `elapsed_s`, `distance_m`, `speed_mps`, `pace_min_per_km`, `altitude_m`,
+  `heart_rate`, `cadence_spm` (steps/min for running and walking) or
+  `cadence_rpm`, `power_w`, `vertical_oscillation_mm`, `vertical_ratio_pct`,
+  `ground_contact_ms`, `step_length_mm`, `temperature_c`, `lat`, `lon` (degrees).
+  Empty cells mean the sensor had no value at that second (common in the first
+  seconds for running dynamics).
+- A run of 40 minutes is about 2,500 rows. Do not read them all into the
+  conversation: write the CSV to a file and compute with Python, or use
+  `--every 30`/`--every 60` for an overview.
+- **GPS is a home/route location.** Use `--no-gps` unless the question is
+  about the route, and never paste coordinates into an answer unless asked.
+- Beat-to-beat HRV is in the file only if the watch was set to record it
+  (`hrv_mesgs` in `fit messages`); the 5-minute overnight HRV is in the
+  daily data instead.
+- Files are cached in `data/.fit-cache/` after the first download.
+
+## 7. How to answer
 
 1. State the date range and how many days actually have data.
 2. Give the numbers (averages, ranges, trends) with units, from the query

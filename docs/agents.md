@@ -76,6 +76,18 @@ python3 tools/medplum_agent.py graphql '{ ObservationList(code: "http://loinc.or
 python3 tools/medplum_agent.py codes stress      # meaning and unit of custom codes
 ```
 
+Workout detail (one row per second from the FIT file):
+
+```sh
+python3 tools/medplum_agent.py fit list
+python3 tools/medplum_agent.py fit records <activity> --no-gps > run.csv
+python3 tools/medplum_agent.py fit laps <activity>
+```
+
+The FIT archive is downloaded from Medplum (`Binary`, read-only client) and
+decoded with Garmin's FIT SDK, an optional install
+(`python3 -m pip install garmin-fit-sdk`, under Garmin's FIT Protocol License).
+
 Date filters must carry the account's UTC offset (e.g. `+07:00`); ranges use
 `_filter: "date ge <from> and date lt <to>"`. Medplum's GraphQL `date`
 argument takes one value only.

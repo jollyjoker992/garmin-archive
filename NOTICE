@@ -28,5 +28,11 @@ Garmin
   or its subsidiaries. Use of the Garmin Personal API is subject to Garmin's
   terms, which each user accepts when creating a key.
 
+Garmin FIT SDK (optional, not included)
+  tools/medplum_agent.py can decode FIT files with Garmin's FIT SDK
+  (garmin-fit-sdk on PyPI) if the user installs it. The SDK is licensed under
+  Garmin's FIT Protocol License Agreement and is not distributed with this
+  project.
+
 HL7 FHIR
   FHIR is the registered trademark of Health Level Seven International.
