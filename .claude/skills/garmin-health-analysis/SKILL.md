@@ -29,6 +29,13 @@ client or the admin login to read data.
 
 ## 3. Rules that prevent wrong answers
 
+0. **Medplum is the only source.** Do not read, parse or unzip anything under
+   `data/days/` or `data/fhir/` to answer a question, even if you know the
+   files are there; not for daily values and not for FIT files. If Medplum or
+   the FIT decoder is unavailable, say which and how to fix it (section 1,
+   section 6), and stop. Fall back to the raw archive only if the person
+   explicitly says so.
+
 1. **Dates carry the account's UTC offset.** Days are local calendar days; read
    the offset from any `effectivePeriod.start` (the examples below use `+07:00`). In GraphQL use
    `_filter: "date ge 2026-11-01T00:00:00+07:00 and date lt 2026-12-01T00:00:00+07:00"`
@@ -166,7 +173,8 @@ python3 tools/medplum_agent.py fit messages <activity>                       # w
 - The decoder is Garmin's official FIT SDK, an **optional** dependency. If the
   command says it is missing, tell the person to run
   `python3 -m pip install garmin-fit-sdk` (installing it means accepting
-  Garmin's FIT Protocol License); do not install it for them without asking.
+  Garmin's FIT Protocol License); do not install it for them without asking,
+  and do not work around it by unzipping `data/days/.../original.zip` yourself.
 - `records` columns (only those the file has): `time` (local, with offset),
   `elapsed_s`, `distance_m`, `speed_mps`, `pace_min_per_km`, `altitude_m`,
   `heart_rate`, `cadence_spm` (steps/min for running and walking) or

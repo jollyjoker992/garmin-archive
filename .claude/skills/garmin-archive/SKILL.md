@@ -1,6 +1,6 @@
 ---
 name: garmin-archive
-description: Operate the garmin-archive backup (crawl missing Garmin days, check backup status, fix failed days or uploads) and read the archived raw Garmin health and activity data (sleep, HRV, heart rate, stress, body battery, steps, activities, FIT files). Use when the user asks about their Garmin backup, wants a missing day filled, or wants a question answered from their Garmin data.
+description: Operate the garmin-archive backup - crawl missing Garmin days, check backup and upload status, fix failed days or uploads, restore cloud-only days. Use when the user asks about the backup itself. NOT for questions about the health or workout data (sleep, HRV, heart rate, workouts, FIT files): those go to the garmin-health-analysis skill, which reads the data through Medplum.
 ---
 
 # garmin-archive
@@ -47,44 +47,12 @@ python3 garmin_archive.py run              # crawls, archives, uploads
   yourself: Garmin no longer serves their intraday detail. To redo FHIR output,
   run `python3 garmin_fhir.py map --force` and `load`, which only read the archive.
 
-## Answer a question from the data
+## Questions about the health data
 
-1. Read `data/manifest.json` and pick the days with `status` `final` or
-   `provisional`.
-2. Open the files under `data/<days[DATE].path>/`. The ones most often needed:
-
-   | Question | File | Where to look |
-   |---|---|---|
-   | Sleep duration, stages, score | `sleep.json` | `sleepTimeSeconds`, `deepSleepSeconds`, `remSleepSeconds`, `sleepScores.overall.value` |
-   | HRV | `hrv_summary.json` | `hrvSummaries[0].lastNightAvg`, `weeklyAvg`, `status` |
-   | Resting heart rate | `heart_rate.json` | `restingHeartRate`; samples in `heartRateValues` as `[epoch ms, bpm]` |
-   | Steps | `steps.json` | `[0].totalSteps`, `totalDistance` |
-   | Stress | `stress.json` | `[0].values.overallStressLevel` |
-   | Body battery | `body_battery.json` | `[0].charged`, `drained`, `bodyBatteryValuesArray` |
-   | Workouts | `activities.json` | per item: `activityType.typeKey`, `distance` (m), `duration` (s), `averageHR` |
-   | Per-second track | `activities/<id>/original.zip` | unzip, parse the `.fit` file |
-
-3. Check that a value is present before using it. A missing file, `[]`, or
-   `null` fields mean Garmin had no measurement that day; say so instead of
-   treating it as zero.
-4. For ranges, loop over the day folders. There is no database and no
-   pre-aggregated file.
-
-## Answer a question from the local Medplum
-
-If `medplum/` is running (`docker compose ps` in that folder), the same data is
-in FHIR at http://localhost:8103/fhir/R4.
-
-1. Get a token with the read-only agent client from `.env`
-   (`GARMIN_MEDPLUM_AGENT_CLIENT_ID` / `_SECRET`, `grant_type=client_credentials`
-   at `/oauth2/token`). Never use the loader client to answer questions.
-2. Search Observations by code and date. Always give dates with the account's
-   UTC offset (see any `effectivePeriod.start`), e.g.
-   `date=ge2026-11-07T00:00:00%2B07:00` for UTC+7; bare dates are read as UTC.
-3. For a `garmin-metrics` code, call `CodeSystem/$lookup` first and read its
-   definition and unit before interpreting the value.
-4. Workouts: Observation code LOINC 55411-3; `derivedFrom` points to the
-   DocumentReference whose attachment is the FIT archive.
+Do not answer them from `data/`. Use the **garmin-health-analysis** skill: it
+reads the data through Medplum with the read-only client, and gets workout
+detail with `python3 tools/medplum_agent.py fit ...`. The raw folder is for
+operating and debugging the backup only (layout in `docs/data-format.md`).
 
 The data is personal health data. Keep it on this machine: do not paste raw
 files into external services.

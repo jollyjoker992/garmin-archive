@@ -43,7 +43,22 @@ python3 -m unittest discover -s tests -v    # offline tests
 Exit codes of `run`: `0` complete, `1` partial (retried next run), `2`
 configuration or rejected API key (needs a person), `3` another run is active.
 
-## Reading the data
+## Answering questions about the data: use Medplum, not `data/`
+
+Questions about health or workout data (sleep, HRV, heart rate, stress, steps,
+workouts, anything inside a workout) are answered from the local Medplum with
+the read-only agent client, following `.claude/skills/garmin-health-analysis/SKILL.md`:
+`python3 tools/medplum_agent.py graphql|codes|fit ...`. In particular:
+
+- Do not open, parse or unzip files under `data/days/` (`*.json`,
+  `activities/<id>/original.zip`) or `data/fhir/` to answer a question.
+  Second-by-second workout data comes from `tools/medplum_agent.py fit records`.
+- If Medplum is not reachable, say so and suggest `cd medplum && docker compose up -d`.
+  If the FIT decoder is missing, say so and suggest
+  `python3 -m pip install garmin-fit-sdk`. In both cases stop there; reading
+  the raw folder instead needs the owner's explicit OK.
+
+## The raw archive (operating and debugging the backup only)
 
 - The manifest on the upload targets is authoritative for what is backed up;
   `run` merges it into the local one first. A day with `adopted_from` exists
@@ -60,7 +75,8 @@ configuration or rejected API key (needs a person), `3` another run is active.
 - `profile_settings.json` and `heart_rate_zones.json` are snapshots taken at
   crawl time, not historical values.
 - Activities: `activities.json` is the list for the day;
-  `activities/<id>/original.zip` contains the FIT file with per-second samples.
+  `activities/<id>/original.zip` is the archived FIT file (for analysis, use
+  `tools/medplum_agent.py fit`, which reads the copy in Medplum).
 - If the day folder is gone but `archive` exists, extract
   `<data dir>/<archive.file>`; it unpacks to `YYYY-MM-DD/`.
 
