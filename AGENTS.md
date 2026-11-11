@@ -114,7 +114,9 @@ crawl on the host while the container's scheduler runs a job.
 - Do not call Garmin in parallel or lower `GARMIN_MIN_INTERVAL` to speed up a
   backfill. Rate limits are unpublished; the pacing is deliberate.
 - `--refetch` on an uploaded day rewrites its object on S3 Glacier, which can
-  incur an early-deletion charge. Ask the owner first.
+  incur an early-deletion charge. Ask the owner first. Never `--refetch` a day
+  older than about four months: Garmin no longer serves its intraday detail,
+  so the archived copy would be replaced by a thinner one.
 - Do not switch to the unofficial `garminconnect` / `garth` libraries. They log
   in with the account password and get accounts rate-limited.
 - Uploading sends health data to external services. Only use the remotes the

@@ -1,4 +1,4 @@
-# FHIR mapping (version 0.1.1)
+# FHIR mapping (version 0.1.2)
 
 How the raw archive (`data/days/YYYY/YYYY-MM-DD/`) becomes FHIR R4 resources.
 This is the specification that `garmin_fhir.py map` implements. Nothing here
@@ -165,9 +165,9 @@ Identifier value: `<date>/<key>`.
 | `calories-resting` | `resting-calories` | `kcal` | `daily_summary` calories.burnedResting | |
 | `moderate-minutes` | LOINC 77592-4 Moderate physical activity | `min` | `daily_summary` intensityMinutes.moderate | `intensity-minutes-goal` |
 | `vigorous-minutes` | LOINC 77593-2 Vigorous physical activity | `min` | `daily_summary` intensityMinutes.vigorous | |
-| `resting-hr` | LOINC 40443-4 Heart rate --resting | `/min` | `heart_rate` restingHeartRate | `resting-hr-7day-avg` |
-| `hr-min` | LOINC 8883-1 Heart rate 24 hour minimum | `/min` | `heart_rate` minHeartRate | |
-| `hr-max` | LOINC 8873-2 Heart rate 24 hour maximum | `/min` | `heart_rate` maxHeartRate | |
+| `resting-hr` | LOINC 40443-4 Heart rate --resting | `/min` | `heart_rate` restingHeartRate, else `daily_summary` heartRate.restingValue | `resting-hr-7day-avg` |
+| `hr-min` | LOINC 8883-1 Heart rate 24 hour minimum | `/min` | `heart_rate` minHeartRate, else `daily_summary` heartRate.minValue | |
+| `hr-max` | LOINC 8873-2 Heart rate 24 hour maximum | `/min` | `heart_rate` maxHeartRate, else `daily_summary` heartRate.maxValue | |
 | `hr-samples` | LOINC 8867-4 Heart rate, `valueSampledData` | `/min` | `heart_rate` heartRateValues | see "Time series" |
 | `spo2-avg` | LOINC 2708-6 + 59408-5 | `%` | `daily_summary` pulseOx.avgValue | `spo2-daily-min` |
 | `spo2-hourly` | LOINC 2708-6 + 59408-5, `valueSampledData` | `%` | `spo2` spO2HourlyAverages | |

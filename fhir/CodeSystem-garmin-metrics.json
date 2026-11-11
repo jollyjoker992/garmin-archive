@@ -2,7 +2,7 @@
  "resourceType": "CodeSystem",
  "id": "garmin-metrics",
  "url": "https://github.com/jollyjoker992/garmin-archive/fhir/CodeSystem/garmin-metrics",
- "version": "0.1.1",
+ "version": "0.1.2",
  "name": "GarminMetrics",
  "title": "Garmin metrics without a standard code",
  "status": "draft",

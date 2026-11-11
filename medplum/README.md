@@ -29,7 +29,7 @@ python3 setup.py check      # verifies both clients and the CodeSystem
 | ClientApplication | `garmin-archive-loader` | Read-write. Used by the loader. |
 | AccessPolicy | `garmin-archive-agent-read-only` | Read and search only, on Patient, Device, Observation, DocumentReference, Binary, CodeSystem, ValueSet. |
 | ClientApplication | `garmin-archive-agent` | Uses that policy. For AI agents and other read-only consumers. |
-| CodeSystem, ValueSet | `garmin-metrics` (version = mapping version, 0.1.1 now) | Loaded from `fhir/`, so `$lookup`, `$validate-code` and `$expand` work. `garmin_fhir.py load` updates them when the version changes. |
+| CodeSystem, ValueSet | `garmin-metrics` (version = mapping version, 0.1.2 now) | Loaded from `fhir/`, so `$lookup`, `$validate-code` and `$expand` work. `garmin_fhir.py load` updates them when the version changes. |
 
 The client credentials are written to the repository's `.env`:
 `GARMIN_MEDPLUM_URL`, `GARMIN_MEDPLUM_PROJECT_ID`,

@@ -32,7 +32,7 @@ from zoneinfo import ZoneInfo
 
 import garmin_archive as ga
 
-MAPPING_VERSION = "0.1.1"
+MAPPING_VERSION = "0.1.2"
 REPO_DIR = Path(__file__).resolve().parent
 CODESYSTEM_FILE = REPO_DIR / "fhir" / "CodeSystem-garmin-metrics.json"
 DEFAULT_BASE = "https://github.com/jollyjoker992/garmin-archive/fhir"
@@ -295,6 +295,7 @@ class DayMapper:
 
     def run(self) -> list[dict]:
         summary = self._daily_summary_row()
+        self.summary = summary or {}
         self._find_ids(summary)
         self._set_day_bounds(summary)
         self._daily(summary)
@@ -437,11 +438,15 @@ class DayMapper:
             raise MappingError(f"heart_rate.json is for {hr.get('calendarDate')}")
         period = self.day_period()
         o = self.observation
-        o(self.key("resting-hr"), "loinc:40443-4", effective=period, value=num(hr.get("restingHeartRate")),
+        # Garmin's heart-rate endpoint only keeps intraday detail (samples, min, max) for
+        # about four months; the daily summary keeps min/max/resting for every day.
+        daily = self.summary.get("heartRate") or {}
+        pick = lambda primary, fallback: num(hr.get(primary) if hr.get(primary) is not None else daily.get(fallback))
+        o(self.key("resting-hr"), "loinc:40443-4", effective=period, value=pick("restingHeartRate", "restingValue"),
           category="vital-signs",
           components=[self.component("gm:resting-hr-7day-avg", num(hr.get("lastSevenDaysAvgRestingHeartRate")))])
-        o(self.key("hr-min"), "loinc:8883-1", effective=period, value=num(hr.get("minHeartRate")), category="vital-signs")
-        o(self.key("hr-max"), "loinc:8873-2", effective=period, value=num(hr.get("maxHeartRate")), category="vital-signs")
+        o(self.key("hr-min"), "loinc:8883-1", effective=period, value=pick("minHeartRate", "minValue"), category="vital-signs")
+        o(self.key("hr-max"), "loinc:8873-2", effective=period, value=pick("maxHeartRate", "maxValue"), category="vital-signs")
         if hr.get("heartRateValues"):
             points = self._series(hr["heartRateValues"], hr.get("heartRateValueDescriptors"), "key", "index", "heartrate")
             series = self.sampled(points, 120_000, "heart rate")

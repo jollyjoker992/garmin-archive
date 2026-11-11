@@ -2,7 +2,7 @@
  "resourceType": "ValueSet",
  "id": "garmin-metrics",
  "url": "https://github.com/jollyjoker992/garmin-archive/fhir/ValueSet/garmin-metrics",
- "version": "0.1.1",
+ "version": "0.1.2",
  "name": "GarminMetrics",
  "title": "All selectable Garmin metric codes",
  "status": "draft",

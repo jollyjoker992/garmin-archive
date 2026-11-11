@@ -167,6 +167,20 @@ class MapTests(unittest.TestCase):
         fm = json.loads((self.root / "fhir/manifest.json").read_text())
         self.assertEqual(fm["days"][DAY]["source_fetched_at"], "2026-01-06T00:00:00Z")
 
+    def test_hr_min_max_fall_back_to_daily_summary(self):
+        make_day(self.root)
+        d = self.root / "days" / DAY[:4] / DAY
+        hr = json.loads((d / "heart_rate.json").read_text())       # older shape: no intraday detail
+        hr.update(minHeartRate=None, maxHeartRate=None, heartRateValues=None, heartRateValueDescriptors=None)
+        (d / "heart_rate.json").write_text(json.dumps(hr))
+        ds = json.loads((d / "daily_summary.json").read_text())
+        ds["data"][0]["heartRate"] = {"minValue": 49, "maxValue": 171, "restingValue": 55}
+        (d / "daily_summary.json").write_text(json.dumps(ds))
+        self.assertEqual(self.run_map(), 0)
+        r = self.resources()
+        self.assertEqual((r[f"{DAY}/hr-min"]["valueQuantity"]["value"], r[f"{DAY}/hr-max"]["valueQuantity"]["value"]), (49, 171))
+        self.assertNotIn(f"{DAY}/hr-samples", r)
+
     def test_hrv_without_sleep_fields_uses_hrv_window(self):
         make_day(self.root)
         d = self.root / "days" / DAY[:4] / DAY

@@ -92,6 +92,22 @@ Written by the tool so that an archive explains itself without the manifest:
 }
 ```
 
+## What Garmin keeps, and for how long
+
+Observed on 2026-11-11 (crawling 2026-03-15 to 2026-11-10 in one run):
+
+| Data | Available back to |
+|---|---|
+| Daily values: steps, calories, stress, respiration, SpO2 daily, resting/min/max HR (daily summary), sleep stages and score, nightly HRV, Body Battery points, workouts with FIT files | the start of the account's data |
+| Intraday detail: heart-rate samples and the heart-rate endpoint's min/max, 5-minute HRV readings, hourly SpO2 | about four months (here: from 2026-07-01) |
+
+For older days Garmin returns the intraday fields as `null`. The archive keeps
+what was available when the day was crawled, so crawling daily preserves the
+detail. Re-crawling an old day (`--refetch`) replaces its folder with what
+Garmin returns now, which can be less, and re-uploads that copy over the
+previous one on every target. Do not `--refetch` days older than about four
+months.
+
 ## manifest.json
 
 The single source of truth for what exists. It is rewritten atomically after
