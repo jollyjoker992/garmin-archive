@@ -2,7 +2,7 @@
 # Standard-library Python plus rclone; no secrets are baked in (see docs/docker.md).
 FROM rclone/rclone:1.76.0 AS rclone
 
-FROM python:3.12-slim-bookworm
+FROM python:3.15-slim-bookworm
 RUN apt-get update \
  && apt-get install -y --no-install-recommends tzdata ca-certificates \
  && rm -rf /var/lib/apt/lists/*
