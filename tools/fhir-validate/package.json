@@ -1,0 +1,10 @@
+{
+  "name": "garmin-archive-fhir-validate",
+  "private": true,
+  "type": "module",
+  "description": "Validates FHIR JSON and NDJSON with the validator of @medplum/core.",
+  "dependencies": {
+    "@medplum/core": "5.2.17",
+    "@medplum/definitions": "5.2.17"
+  }
+}

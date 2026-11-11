@@ -1,0 +1,13 @@
+# Never send secrets or personal data into the build context.
+.env
+**/.env
+data/
+.git/
+.claude/
+**/node_modules/
+**/__pycache__/
+*.pyc
+.DS_Store
+medplum/
+tools/
+docs/

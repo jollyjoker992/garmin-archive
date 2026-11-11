@@ -1,0 +1,57 @@
+{
+ "resourceType": "Observation",
+ "id": "sleep-score",
+ "identifier": [
+  {
+   "system": "https://github.com/jollyjoker992/garmin-archive/fhir/identifier/observation",
+   "value": "2026-11-09/sleep-score"
+  }
+ ],
+ "status": "final",
+ "code": {
+  "coding": [
+   {
+    "system": "https://github.com/jollyjoker992/garmin-archive/fhir/CodeSystem/garmin-metrics",
+    "code": "sleep-score",
+    "display": "Sleep score"
+   }
+  ]
+ },
+ "subject": {
+  "reference": "Patient/example"
+ },
+ "device": {
+  "reference": "Device/example"
+ },
+ "effectivePeriod": {
+  "start": "2026-11-08T23:30:00+07:00",
+  "end": "2026-11-09T06:10:00+07:00"
+ },
+ "valueQuantity": {
+  "value": 76,
+  "unit": "{score}",
+  "system": "http://unitsofmeasure.org",
+  "code": "{score}"
+ },
+ "component": [
+  {
+   "code": {
+    "coding": [
+     {
+      "system": "https://github.com/jollyjoker992/garmin-archive/fhir/CodeSystem/garmin-metrics",
+      "code": "sleep-score-qualifier",
+      "display": "Sleep score qualifier"
+     }
+    ]
+   },
+   "valueCodeableConcept": {
+    "text": "FAIR"
+   }
+  }
+ ],
+ "derivedFrom": [
+  {
+   "reference": "Observation/sleep"
+  }
+ ]
+}

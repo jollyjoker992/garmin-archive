@@ -1,0 +1,32 @@
+garmin-archive
+Copyright 2026 Hiếu Phạm
+
+Licensed under the Apache License, Version 2.0 (see LICENSE).
+
+Third-party content and attribution
+-----------------------------------
+
+LOINC
+  This material contains content from LOINC (http://loinc.org): the LOINC codes
+  and names used in garmin_fhir.py, fhir/ and the documentation. LOINC is
+  copyright Regenstrief Institute, Inc. and the Logical Observation Identifiers
+  Names and Codes (LOINC) Committee and is available at no cost under the
+  license at http://loinc.org/license. LOINC is a registered United States
+  trademark of Regenstrief Institute, Inc.
+
+Medplum
+  medplum/docker-compose.yml is based on docker-compose.full-stack.yml from
+  https://github.com/medplum/medplum (Apache License 2.0, Copyright Orangebot,
+  Inc. and Medplum contributors). Medplum images are pulled from Docker Hub at
+  runtime and are not part of this repository.
+
+Garmin
+  The Personal API endpoint paths were taken from Garmin's own client,
+  https://github.com/garmin/connect-personal-api-python (Apache License 2.0).
+  No code was copied. This project is not affiliated with, endorsed by or
+  supported by Garmin. Garmin and Garmin Connect are trademarks of Garmin Ltd.
+  or its subsidiaries. Use of the Garmin Personal API is subject to Garmin's
+  terms, which each user accepts when creating a key.
+
+HL7 FHIR
+  FHIR is the registered trademark of Health Level Seven International.

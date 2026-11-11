@@ -1,0 +1,123 @@
+{
+ "resourceType": "Observation",
+ "id": "sleep",
+ "identifier": [
+  {
+   "system": "https://github.com/jollyjoker992/garmin-archive/fhir/identifier/observation",
+   "value": "2026-11-09/sleep"
+  }
+ ],
+ "status": "final",
+ "code": {
+  "coding": [
+   {
+    "system": "http://loinc.org",
+    "code": "93832-4",
+    "display": "Sleep duration"
+   }
+  ]
+ },
+ "subject": {
+  "reference": "Patient/example"
+ },
+ "device": {
+  "reference": "Device/example"
+ },
+ "effectivePeriod": {
+  "start": "2026-11-08T23:30:00+07:00",
+  "end": "2026-11-09T06:10:00+07:00"
+ },
+ "valueQuantity": {
+  "value": 394,
+  "unit": "min",
+  "system": "http://unitsofmeasure.org",
+  "code": "min"
+ },
+ "component": [
+  {
+   "code": {
+    "coding": [
+     {
+      "system": "http://loinc.org",
+      "code": "93831-6",
+      "display": "Deep sleep duration"
+     }
+    ]
+   },
+   "valueQuantity": {
+    "value": 70,
+    "unit": "min",
+    "system": "http://unitsofmeasure.org",
+    "code": "min"
+   }
+  },
+  {
+   "code": {
+    "coding": [
+     {
+      "system": "http://loinc.org",
+      "code": "93830-8",
+      "display": "Light sleep duration"
+     }
+    ]
+   },
+   "valueQuantity": {
+    "value": 240,
+    "unit": "min",
+    "system": "http://unitsofmeasure.org",
+    "code": "min"
+   }
+  },
+  {
+   "code": {
+    "coding": [
+     {
+      "system": "http://loinc.org",
+      "code": "93829-0",
+      "display": "REM sleep duration"
+     }
+    ]
+   },
+   "valueQuantity": {
+    "value": 84,
+    "unit": "min",
+    "system": "http://unitsofmeasure.org",
+    "code": "min"
+   }
+  },
+  {
+   "code": {
+    "coding": [
+     {
+      "system": "http://loinc.org",
+      "code": "93828-2",
+      "display": "Nighttime awakening duration"
+     }
+    ]
+   },
+   "valueQuantity": {
+    "value": 6,
+    "unit": "min",
+    "system": "http://unitsofmeasure.org",
+    "code": "min"
+   }
+  },
+  {
+   "code": {
+    "coding": [
+     {
+      "system": "https://github.com/jollyjoker992/garmin-archive/fhir/CodeSystem/garmin-metrics",
+      "code": "sleep-avg-spo2",
+      "display": "SpO2 during sleep, average"
+     }
+    ]
+   },
+   "valueQuantity": {
+    "value": 97,
+    "unit": "%",
+    "system": "http://unitsofmeasure.org",
+    "code": "%"
+   }
+  }
+ ]
+}

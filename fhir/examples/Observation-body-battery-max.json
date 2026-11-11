@@ -1,0 +1,36 @@
+{
+ "resourceType": "Observation",
+ "id": "body-battery-max",
+ "identifier": [
+  {
+   "system": "https://github.com/jollyjoker992/garmin-archive/fhir/identifier/observation",
+   "value": "2026-11-09/body-battery-max"
+  }
+ ],
+ "status": "final",
+ "code": {
+  "coding": [
+   {
+    "system": "https://github.com/jollyjoker992/garmin-archive/fhir/CodeSystem/garmin-metrics",
+    "code": "body-battery-max",
+    "display": "Body Battery, daily maximum"
+   }
+  ]
+ },
+ "subject": {
+  "reference": "Patient/example"
+ },
+ "device": {
+  "reference": "Device/example"
+ },
+ "effectivePeriod": {
+  "start": "2026-11-09T00:00:00+07:00",
+  "end": "2026-11-10T00:00:00+07:00"
+ },
+ "valueQuantity": {
+  "value": 83,
+  "unit": "{score}",
+  "system": "http://unitsofmeasure.org",
+  "code": "{score}"
+ }
+}

@@ -1,0 +1,70 @@
+{
+ "resourceType": "Observation",
+ "id": "spo2",
+ "identifier": [
+  {
+   "system": "https://github.com/jollyjoker992/garmin-archive/fhir/identifier/observation",
+   "value": "2026-11-09/spo2-avg"
+  }
+ ],
+ "status": "final",
+ "category": [
+  {
+   "coding": [
+    {
+     "system": "http://terminology.hl7.org/CodeSystem/observation-category",
+     "code": "vital-signs"
+    }
+   ]
+  }
+ ],
+ "code": {
+  "coding": [
+   {
+    "system": "http://loinc.org",
+    "code": "2708-6",
+    "display": "Oxygen saturation in Arterial blood"
+   },
+   {
+    "system": "http://loinc.org",
+    "code": "59408-5",
+    "display": "Oxygen saturation in Arterial blood by Pulse oximetry"
+   }
+  ]
+ },
+ "subject": {
+  "reference": "Patient/example"
+ },
+ "device": {
+  "reference": "Device/example"
+ },
+ "effectivePeriod": {
+  "start": "2026-11-09T00:00:00+07:00",
+  "end": "2026-11-10T00:00:00+07:00"
+ },
+ "valueQuantity": {
+  "value": 97,
+  "unit": "%",
+  "system": "http://unitsofmeasure.org",
+  "code": "%"
+ },
+ "component": [
+  {
+   "code": {
+    "coding": [
+     {
+      "system": "https://github.com/jollyjoker992/garmin-archive/fhir/CodeSystem/garmin-metrics",
+      "code": "spo2-daily-min",
+      "display": "SpO2, daily lowest"
+     }
+    ]
+   },
+   "valueQuantity": {
+    "value": 90,
+    "unit": "%",
+    "system": "http://unitsofmeasure.org",
+    "code": "%"
+   }
+  }
+ ]
+}

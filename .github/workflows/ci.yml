@@ -1,0 +1,88 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  secrets:
+    name: Secret scan (gitleaks, full history)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0            # scan every commit, not only the last one
+      - name: gitleaks
+        run: |
+          docker run --rm -v "$PWD:/repo" ghcr.io/gitleaks/gitleaks:v8.30.1 \
+            git /repo --redact --no-banner --exit-code 1 --verbose
+
+  test:
+    name: Tests (Python ${{ matrix.python }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.10", "3.11", "3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: ${{ matrix.python }}
+      - name: Unit tests (no network, no credentials)
+        run: python -m unittest discover -s tests -v
+
+  checks:
+    name: Lint and config checks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: shellcheck
+        run: |
+          docker run --rm -v "$PWD:/mnt:ro" koalaman/shellcheck:v0.11.0 \
+            run-daily.sh docker/entrypoint.sh docker/create-s3-key.sh
+      - name: JSON files parse
+        run: |
+          for f in .mcp.json fhir/*.json fhir/examples/*.json docs/manifest.schema.json; do
+            python3 -m json.tool "$f" > /dev/null || { echo "invalid JSON: $f"; exit 1; }
+          done
+      - name: Compose files resolve
+        run: |
+          # Placeholder env files: compose needs them to resolve variables; no real secrets in CI.
+          printf 'GARMIN_PERSONAL_API_KEY=ci\n' > .env
+          printf 'POSTGRES_PASSWORD=ci\nREDIS_PASSWORD=ci\nMEDPLUM_ADMIN_EMAIL=ci@example.com\nMEDPLUM_ADMIN_PASSWORD=ci\n' > medplum/.env
+          docker compose config -q
+          docker compose -f medplum/docker-compose.yml config -q
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: tools/fhir-validate/package-lock.json
+      - name: FHIR resources validate (Medplum validator)
+        working-directory: tools/fhir-validate
+        run: |
+          npm ci --no-audit --no-fund
+          node validate.mjs ../../fhir
+
+  docker:
+    name: Docker image builds and tests pass inside it
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Build
+        run: docker build -t garmin-archive:ci .
+      - name: Tests in the image
+        run: docker run --rm --entrypoint sh garmin-archive:ci -c 'cd /app && python3 -m unittest discover -s tests'
+      - name: No secrets in the image
+        run: |
+          docker run --rm --entrypoint sh garmin-archive:ci -c \
+            'test -z "$(find / -xdev \( -name .env -o -name secrets.env -o -name rclone.conf \) 2>/dev/null)"'

@@ -1,0 +1,11 @@
+{
+ "resourceType": "Patient",
+ "id": "example",
+ "identifier": [
+  {
+   "system": "https://github.com/jollyjoker992/garmin-archive/fhir/identifier/garmin-user",
+   "value": "100000001"
+  }
+ ],
+ "active": true
+}

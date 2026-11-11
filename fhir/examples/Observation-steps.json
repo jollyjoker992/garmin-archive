@@ -1,0 +1,65 @@
+{
+ "resourceType": "Observation",
+ "id": "steps",
+ "identifier": [
+  {
+   "system": "https://github.com/jollyjoker992/garmin-archive/fhir/identifier/observation",
+   "value": "2026-11-09/steps"
+  }
+ ],
+ "status": "final",
+ "category": [
+  {
+   "coding": [
+    {
+     "system": "http://terminology.hl7.org/CodeSystem/observation-category",
+     "code": "activity"
+    }
+   ]
+  }
+ ],
+ "code": {
+  "coding": [
+   {
+    "system": "http://loinc.org",
+    "code": "41950-7",
+    "display": "Number of steps in 24 hour Measured"
+   }
+  ]
+ },
+ "subject": {
+  "reference": "Patient/example"
+ },
+ "device": {
+  "reference": "Device/example"
+ },
+ "effectivePeriod": {
+  "start": "2026-11-09T00:00:00+07:00",
+  "end": "2026-11-10T00:00:00+07:00"
+ },
+ "valueQuantity": {
+  "value": 6344,
+  "unit": "/d",
+  "system": "http://unitsofmeasure.org",
+  "code": "/d"
+ },
+ "component": [
+  {
+   "code": {
+    "coding": [
+     {
+      "system": "https://github.com/jollyjoker992/garmin-archive/fhir/CodeSystem/garmin-metrics",
+      "code": "step-goal",
+      "display": "Daily step goal"
+     }
+    ]
+   },
+   "valueQuantity": {
+    "value": 4460,
+    "unit": "{#}",
+    "system": "http://unitsofmeasure.org",
+    "code": "{#}"
+   }
+  }
+ ]
+}
