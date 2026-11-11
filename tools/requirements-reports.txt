@@ -1,0 +1,5 @@
+# Optional: PDF reports (tools/garmin_report.py) and FIT decoding (tools/medplum_agent.py fit).
+# Installing garmin-fit-sdk means accepting Garmin's FIT Protocol License.
+matplotlib>=3.8
+reportlab>=4.0
+garmin-fit-sdk>=21.0

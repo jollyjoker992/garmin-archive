@@ -92,10 +92,26 @@ Date filters must carry the account's UTC offset (e.g. `+07:00`); ranges use
 `_filter: "date ge <from> and date lt <to>"`. Medplum's GraphQL `date`
 argument takes one value only.
 
+## PDF reports
+
+```sh
+python3 -m pip install -r tools/requirements-reports.txt     # once: matplotlib, reportlab, garmin-fit-sdk
+python3 tools/garmin_report.py activity <activity> --facts facts.json
+python3 tools/garmin_report.py activity <activity> --narrative narrative.json   # -> data/reports/activity-<id>.pdf
+python3 tools/garmin_report.py wellness --week 2026-W45 --facts facts.json      # or --month 2026-10, --from/--to
+python3 tools/garmin_report.py wellness --week 2026-W45 --narrative narrative.json
+```
+
+The script computes the facts and draws the charts; the evaluation and
+recommendations in `narrative.json` are written by a person or an agent from
+those facts (the `garmin-reports` skill describes how).
+
 ## Skills
 
 - `.claude/skills/garmin-health-analysis/SKILL.md`: analysing the data (where each
   metric is, rules that prevent wrong answers, tested GraphQL recipes).
+- `.claude/skills/garmin-reports/SKILL.md`: PDF reports for an activity or a
+  week/month of wellness.
 - `.claude/skills/garmin-archive/SKILL.md`: operating the backup (status,
   filling gaps, restore).
 

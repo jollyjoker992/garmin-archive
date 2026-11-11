@@ -105,6 +105,10 @@ loading (`python3 garmin_fhir.py load`, or `./run-daily.sh` for crawl + map + lo
 Look up a custom code with
 `GET CodeSystem/$lookup?system=<garmin-metrics url>&code=<code>`.
 
+For a PDF report (one activity, or a week/month of wellness), follow
+`.claude/skills/garmin-reports/SKILL.md` (`tools/garmin_report.py`: facts,
+then your narrative, then the PDF in `data/reports/`).
+
 To analyse the data, follow `.claude/skills/garmin-health-analysis/SKILL.md`
 and use `python3 tools/medplum_agent.py` (read-only: `graphql`, `codes`,
 `token`, and `fit` for second-by-second workout data from the FIT files). MCP setup for Claude Code (`.mcp.json`) is in `docs/agents.md`.

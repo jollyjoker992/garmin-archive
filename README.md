@@ -190,6 +190,7 @@ summary line are logged. The key and token are never logged.
 - [docs/operations.md](docs/operations.md): rclone setup, scheduling, key renewal, restore, troubleshooting.
 - [docs/manifest.schema.json](docs/manifest.schema.json): JSON Schema of `manifest.json`.
 - [docs/docker.md](docs/docker.md): running everything in Docker (backfill, daily schedule, cloud backup, FHIR load).
+- [docs/agents.md](docs/agents.md) also covers PDF reports (`tools/garmin_report.py`): an activity report with second-by-second charts, and weekly/monthly wellness reports.
 - [docs/agents.md](docs/agents.md): connecting agents (Claude Code MCP via `.mcp.json`, GraphQL, read-only access) and the analysis skill.
 - [docs/fhir-mapping.md](docs/fhir-mapping.md): mapping of the archive to FHIR R4, with the `garmin-metrics` CodeSystem in [fhir/](fhir/).
 - [AGENTS.md](AGENTS.md) and [.claude/skills/garmin-archive/SKILL.md](.claude/skills/garmin-archive/SKILL.md): instructions for AI agents that operate the tool or read the data.
