@@ -1,0 +1,86 @@
+{
+ "resourceType": "Observation",
+ "id": "hrv",
+ "identifier": [
+  {
+   "system": "https://github.com/jollyjoker992/garmin-archive/fhir/identifier/observation",
+   "value": "2026-11-09/hrv-night"
+  }
+ ],
+ "status": "final",
+ "code": {
+  "coding": [
+   {
+    "system": "https://github.com/jollyjoker992/garmin-archive/fhir/CodeSystem/garmin-metrics",
+    "code": "hrv-rmssd-night-avg",
+    "display": "HRV (RMSSD), overnight average"
+   }
+  ]
+ },
+ "subject": {
+  "reference": "Patient/example"
+ },
+ "device": {
+  "reference": "Device/example"
+ },
+ "effectivePeriod": {
+  "start": "2026-11-08T23:30:00+07:00",
+  "end": "2026-11-09T06:10:00+07:00"
+ },
+ "valueQuantity": {
+  "value": 51,
+  "unit": "ms",
+  "system": "http://unitsofmeasure.org",
+  "code": "ms"
+ },
+ "referenceRange": [
+  {
+   "low": {
+    "value": 54,
+    "unit": "ms",
+    "system": "http://unitsofmeasure.org",
+    "code": "ms"
+   },
+   "high": {
+    "value": 74,
+    "unit": "ms",
+    "system": "http://unitsofmeasure.org",
+    "code": "ms"
+   },
+   "text": "Personal balanced range (Garmin baseline)"
+  }
+ ],
+ "component": [
+  {
+   "code": {
+    "coding": [
+     {
+      "system": "https://github.com/jollyjoker992/garmin-archive/fhir/CodeSystem/garmin-metrics",
+      "code": "hrv-status",
+      "display": "HRV status"
+     }
+    ]
+   },
+   "valueCodeableConcept": {
+    "text": "UNBALANCED"
+   }
+  },
+  {
+   "code": {
+    "coding": [
+     {
+      "system": "https://github.com/jollyjoker992/garmin-archive/fhir/CodeSystem/garmin-metrics",
+      "code": "hrv-rmssd-7day-avg",
+      "display": "HRV (RMSSD), 7-day average"
+     }
+    ]
+   },
+   "valueQuantity": {
+    "value": 52,
+    "unit": "ms",
+    "system": "http://unitsofmeasure.org",
+    "code": "ms"
+   }
+  }
+ ]
+}

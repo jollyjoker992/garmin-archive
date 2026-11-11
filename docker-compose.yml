@@ -1,0 +1,42 @@
+# garmin-archive in Docker, next to the local Medplum (medplum/docker-compose.yml).
+#
+#   docker compose up -d --build        start Medplum and the scheduler (backfill on start, then daily)
+#   docker compose logs -f garmin-archive
+#   docker compose run --rm garmin-archive status
+#
+# See docs/docker.md.
+# Same project name as medplum/docker-compose.yml, so both files manage the SAME
+# Medplum containers and volumes (garmin-medplum_postgres-data, _binary-data).
+# A different name would start a second, empty Medplum.
+name: garmin-medplum
+
+include:
+  - medplum/docker-compose.yml
+
+services:
+  garmin-archive:
+    build: .
+    image: garmin-archive:local
+    restart: unless-stopped
+    init: true
+    stop_grace_period: 30s
+    env_file:                            # never baked into the image
+      - path: .env                       # Garmin key, targets, Medplum clients
+      - path: docker/secrets.env         # container-only S3 key (docker/create-s3-key.sh)
+        required: false
+    environment:
+      # Container paths and addresses override the host values in .env.
+      GARMIN_ARCHIVE_DIR: /data
+      GARMIN_RCLONE_BIN: rclone
+      RCLONE_CONFIG: /config/rclone/rclone.conf
+      GARMIN_MEDPLUM_URL: http://medplum-server:8103
+      TZ: ${GARMIN_TZ:-UTC}
+      GARMIN_SCHEDULE_TIME: ${GARMIN_SCHEDULE_TIME:-06:15}
+      GARMIN_RUN_ON_START: ${GARMIN_RUN_ON_START:-true}
+    volumes:
+      - ${GARMIN_DATA_DIR:-./data}:/data                         # raw archive, manifests, FHIR output, logs
+      - ${RCLONE_CONFIG_DIR:-~/.config/rclone}:/config/rclone    # writable: rclone saves renewed Google tokens
+      - ${AWS_CONFIG_DIR:-~/.aws}:/home/app/.aws:ro              # AWS profile used by the s3 remote
+    depends_on:
+      medplum-server:
+        condition: service_healthy

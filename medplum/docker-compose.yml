@@ -1,0 +1,147 @@
+# Local Medplum stack for garmin-archive.
+#
+# Based on Medplum's official docker-compose.full-stack.yml, with these changes:
+# - images pinned to an exact version instead of :latest
+# - every port bound to 127.0.0.1 only; Postgres and Valkey are not published at all
+# - passwords come from medplum/.env (created by setup.py, never committed)
+# - Binary files (workout FIT archives) kept in a named volume owned by the server user
+# - MCP endpoint enabled (/mcp/stream, /mcp/sse)
+# - rate limits and FHIR quota raised for single-user local use
+# - Google sign-in and the public Google client id removed
+#
+# Usage (from this folder):
+#   python3 setup.py init      # once: writes .env with random passwords
+#   docker compose up -d       # first start takes a few minutes
+#   python3 setup.py project   # once: project, clients, access policy, CodeSystem
+name: garmin-medplum
+
+services:
+  # The server image runs as uid 1000 and has no shell. A new named volume is
+  # owned by root, so this one-shot container hands the Binary volume to uid 1000.
+  binary-permissions:
+    image: busybox:1.37
+    command: ['chown', '-R', '1000:1000', '/binary']
+    volumes:
+      - binary-data:/binary
+    restart: 'no'
+
+  postgres:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: medplum
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?run "python3 setup.py init" first}
+      POSTGRES_DB: medplum
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    command:
+      - postgres
+      - -c
+      - listen_addresses=*
+      - -c
+      - statement_timeout=60000
+      - -c
+      - default_transaction_isolation=REPEATABLE READ
+      - -c
+      - shared_preload_libraries=pg_stat_statements,auto_explain
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U medplum']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: valkey/valkey:8.1.11
+    restart: unless-stopped
+    command: ['valkey-server', '--requirepass', '${REDIS_PASSWORD:?run "python3 setup.py init" first}']
+    healthcheck:
+      test: ['CMD-SHELL', 'valkey-cli -a "$$REDIS_PASSWORD" ping | grep -q PONG']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+
+  medplum-server:
+    image: medplum/medplum-server:5.2.17
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      binary-permissions:
+        condition: service_completed_successfully
+    ports:
+      - '127.0.0.1:8103:8103'
+    command: ['env']
+    environment:
+      MEDPLUM_PORT: 8103
+      MEDPLUM_BASE_URL: 'http://localhost:8103/'
+      MEDPLUM_APP_BASE_URL: 'http://localhost:3000/'
+      MEDPLUM_STORAGE_BASE_URL: 'http://localhost:8103/storage/'
+
+      MEDPLUM_DATABASE_HOST: postgres
+      MEDPLUM_DATABASE_PORT: 5432
+      MEDPLUM_DATABASE_DBNAME: medplum
+      MEDPLUM_DATABASE_USERNAME: medplum
+      MEDPLUM_DATABASE_PASSWORD: ${POSTGRES_PASSWORD}
+
+      MEDPLUM_REDIS_HOST: redis
+      MEDPLUM_REDIS_PORT: 6379
+      MEDPLUM_REDIS_PASSWORD: ${REDIS_PASSWORD}
+
+      MEDPLUM_DEFAULT_SUPER_ADMIN_EMAIL: ${MEDPLUM_ADMIN_EMAIL}
+      MEDPLUM_DEFAULT_SUPER_ADMIN_PASSWORD: ${MEDPLUM_ADMIN_PASSWORD}
+
+      MEDPLUM_BINARY_STORAGE: 'file:./binary/'
+      MEDPLUM_SUPPORT_EMAIL: '"Medplum" <support@example.com>'
+      MEDPLUM_MAX_JSON_SIZE: '5mb'
+      MEDPLUM_MAX_BATCH_SIZE: '50mb'
+      MEDPLUM_BOT_LAMBDA_ROLE_ARN: ''
+      MEDPLUM_BOT_LAMBDA_LAYER_NAME: 'medplum-bot-layer'
+      MEDPLUM_VM_CONTEXT_BOTS_ENABLED: 'true'
+      MEDPLUM_DEFAULT_BOT_RUNTIME_VERSION: 'vmcontext'
+      MEDPLUM_ALLOWED_ORIGINS: 'http://localhost:3000'
+      MEDPLUM_INTROSPECTION_ENABLED: 'true'
+      MEDPLUM_MCP_ENABLED: 'true'
+      # Rate limits raised for a single-user local server (Medplum defaults in brackets).
+      # FHIR quota points per minute per client [50000]; the project limit is 10x this.
+      MEDPLUM_DEFAULT_FHIR_QUOTA: 10000000
+      # HTTP requests per minute [60000] and token/auth requests per minute [10].
+      MEDPLUM_DEFAULT_RATE_LIMIT: 600000
+      MEDPLUM_DEFAULT_AUTH_RATE_LIMIT: 300
+      MEDPLUM_SHUTDOWN_TIMEOUT_MILLISECONDS: 30000
+    volumes:
+      - binary-data:/usr/src/medplum/binary
+    healthcheck:
+      # The image has no curl or wget, so the check uses Node's fetch.
+      test:
+        [
+          'CMD',
+          'node',
+          '-e',
+          'fetch("http://localhost:8103/healthcheck").then(r => r.json()).then(console.log).catch(() => { process.exit(1); })',
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 10
+      start_period: 120s
+
+  medplum-app:
+    image: medplum/medplum-app:5.2.17
+    restart: unless-stopped
+    depends_on:
+      medplum-server:
+        condition: service_healthy
+    ports:
+      - '127.0.0.1:3000:3000'
+    healthcheck:
+      test: ['CMD', 'curl', '-f', 'http://localhost:3000']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  postgres-data:
+  binary-data:

@@ -1,0 +1,423 @@
+{
+ "resourceType": "ValueSet",
+ "id": "garmin-metrics",
+ "url": "https://github.com/jollyjoker992/garmin-archive/fhir/ValueSet/garmin-metrics",
+ "version": "0.1.1",
+ "name": "GarminMetrics",
+ "title": "All selectable Garmin metric codes",
+ "status": "draft",
+ "description": "Every selectable code in the garmin-metrics CodeSystem. Group concepts are excluded.",
+ "compose": {
+  "include": [
+   {
+    "system": "https://github.com/jollyjoker992/garmin-archive/fhir/CodeSystem/garmin-metrics",
+    "concept": [
+     {
+      "code": "active-calories",
+      "display": "Active calories burned, daily total"
+     },
+     {
+      "code": "resting-calories",
+      "display": "Resting calories burned, daily total"
+     },
+     {
+      "code": "floors-descended",
+      "display": "Floors descended, daily total"
+     },
+     {
+      "code": "step-goal",
+      "display": "Daily step goal"
+     },
+     {
+      "code": "floors-goal",
+      "display": "Daily floors-climbed goal"
+     },
+     {
+      "code": "intensity-minutes-goal",
+      "display": "Weekly intensity minutes goal"
+     },
+     {
+      "code": "resting-hr-7day-avg",
+      "display": "Resting heart rate, 7-day average"
+     },
+     {
+      "code": "stress-avg",
+      "display": "Stress score, daily average"
+     },
+     {
+      "code": "stress-max",
+      "display": "Stress score, daily maximum"
+     },
+     {
+      "code": "stress-rest-duration",
+      "display": "Time at rest stress level"
+     },
+     {
+      "code": "stress-low-duration",
+      "display": "Time at low stress level"
+     },
+     {
+      "code": "stress-medium-duration",
+      "display": "Time at medium stress level"
+     },
+     {
+      "code": "stress-high-duration",
+      "display": "Time at high stress level"
+     },
+     {
+      "code": "stress-activity-duration",
+      "display": "Time too active to measure stress"
+     },
+     {
+      "code": "stress-uncategorized-duration",
+      "display": "Time without a stress reading"
+     },
+     {
+      "code": "stress-qualifier",
+      "display": "Stress day qualifier"
+     },
+     {
+      "code": "body-battery-level",
+      "display": "Body Battery level"
+     },
+     {
+      "code": "body-battery-max",
+      "display": "Body Battery, daily maximum"
+     },
+     {
+      "code": "body-battery-min",
+      "display": "Body Battery, daily minimum"
+     },
+     {
+      "code": "body-battery-end",
+      "display": "Body Battery, end of day"
+     },
+     {
+      "code": "body-battery-charged",
+      "display": "Body Battery charged during the day"
+     },
+     {
+      "code": "body-battery-drained",
+      "display": "Body Battery drained during the day"
+     },
+     {
+      "code": "body-battery-event-impact",
+      "display": "Body Battery change during an event"
+     },
+     {
+      "code": "body-battery-event-type",
+      "display": "Body Battery event type"
+     },
+     {
+      "code": "hrv-rmssd-night-avg",
+      "display": "HRV (RMSSD), overnight average"
+     },
+     {
+      "code": "hrv-rmssd-night-5min-high",
+      "display": "HRV (RMSSD), highest 5-minute value overnight"
+     },
+     {
+      "code": "hrv-rmssd-7day-avg",
+      "display": "HRV (RMSSD), 7-day average"
+     },
+     {
+      "code": "hrv-baseline-low-upper",
+      "display": "HRV baseline, upper bound of 'low'"
+     },
+     {
+      "code": "hrv-baseline-balanced-low",
+      "display": "HRV baseline, lower bound of 'balanced'"
+     },
+     {
+      "code": "hrv-baseline-balanced-upper",
+      "display": "HRV baseline, upper bound of 'balanced'"
+     },
+     {
+      "code": "hrv-status",
+      "display": "HRV status"
+     },
+     {
+      "code": "hrv-rmssd-readings",
+      "display": "HRV (RMSSD) readings during sleep"
+     },
+     {
+      "code": "sleep-nap-duration",
+      "display": "Nap time"
+     },
+     {
+      "code": "sleep-unmeasurable-duration",
+      "display": "Unmeasurable sleep time"
+     },
+     {
+      "code": "sleep-awake-count",
+      "display": "Number of awakenings"
+     },
+     {
+      "code": "sleep-avg-stress",
+      "display": "Stress score during sleep, average"
+     },
+     {
+      "code": "sleep-avg-hr",
+      "display": "Heart rate during sleep, average"
+     },
+     {
+      "code": "sleep-avg-respiration",
+      "display": "Respiratory rate during sleep, average"
+     },
+     {
+      "code": "sleep-min-respiration",
+      "display": "Respiratory rate during sleep, lowest"
+     },
+     {
+      "code": "sleep-max-respiration",
+      "display": "Respiratory rate during sleep, highest"
+     },
+     {
+      "code": "sleep-avg-spo2",
+      "display": "SpO2 during sleep, average"
+     },
+     {
+      "code": "sleep-min-spo2",
+      "display": "SpO2 during sleep, lowest"
+     },
+     {
+      "code": "sleep-need",
+      "display": "Sleep need"
+     },
+     {
+      "code": "sleep-score",
+      "display": "Sleep score"
+     },
+     {
+      "code": "sleep-score-qualifier",
+      "display": "Sleep score qualifier"
+     },
+     {
+      "code": "sleep-deep-pct",
+      "display": "Deep sleep, share of total sleep"
+     },
+     {
+      "code": "sleep-light-pct",
+      "display": "Light sleep, share of total sleep"
+     },
+     {
+      "code": "sleep-rem-pct",
+      "display": "REM sleep, share of total sleep"
+     },
+     {
+      "code": "sleep-duration-qualifier",
+      "display": "Sleep duration qualifier"
+     },
+     {
+      "code": "sleep-deep-qualifier",
+      "display": "Deep sleep qualifier"
+     },
+     {
+      "code": "sleep-light-qualifier",
+      "display": "Light sleep qualifier"
+     },
+     {
+      "code": "sleep-rem-qualifier",
+      "display": "REM sleep qualifier"
+     },
+     {
+      "code": "sleep-restlessness-qualifier",
+      "display": "Restlessness qualifier"
+     },
+     {
+      "code": "sleep-awake-count-qualifier",
+      "display": "Awakenings qualifier"
+     },
+     {
+      "code": "sleep-stress-qualifier",
+      "display": "Sleep stress qualifier"
+     },
+     {
+      "code": "spo2-daily-min",
+      "display": "SpO2, daily lowest"
+     },
+     {
+      "code": "respiration-daily-min",
+      "display": "Respiratory rate, daily lowest"
+     },
+     {
+      "code": "respiration-daily-max",
+      "display": "Respiratory rate, daily highest"
+     },
+     {
+      "code": "fitness-age",
+      "display": "Fitness age"
+     },
+     {
+      "code": "fitness-age-achievable",
+      "display": "Achievable fitness age"
+     },
+     {
+      "code": "vigorous-days-weekly-avg",
+      "display": "Vigorous activity days per week, 6-week average"
+     },
+     {
+      "code": "vigorous-minutes-weekly-avg",
+      "display": "Vigorous minutes per week, 6-week average"
+     },
+     {
+      "code": "workout-distance",
+      "display": "Workout distance"
+     },
+     {
+      "code": "workout-elapsed-duration",
+      "display": "Workout elapsed time"
+     },
+     {
+      "code": "workout-moving-duration",
+      "display": "Workout moving time"
+     },
+     {
+      "code": "workout-steps",
+      "display": "Workout steps"
+     },
+     {
+      "code": "workout-avg-speed",
+      "display": "Average speed"
+     },
+     {
+      "code": "workout-max-speed",
+      "display": "Maximum speed"
+     },
+     {
+      "code": "workout-avg-grade-adjusted-speed",
+      "display": "Average grade-adjusted speed"
+     },
+     {
+      "code": "workout-elevation-gain",
+      "display": "Elevation gain"
+     },
+     {
+      "code": "workout-elevation-loss",
+      "display": "Elevation loss"
+     },
+     {
+      "code": "workout-avg-power",
+      "display": "Average power"
+     },
+     {
+      "code": "workout-max-power",
+      "display": "Maximum power"
+     },
+     {
+      "code": "workout-normalized-power",
+      "display": "Normalized power"
+     },
+     {
+      "code": "workout-avg-cadence",
+      "display": "Average running cadence"
+     },
+     {
+      "code": "workout-max-cadence",
+      "display": "Maximum running cadence"
+     },
+     {
+      "code": "workout-avg-stride-length",
+      "display": "Average stride length"
+     },
+     {
+      "code": "workout-avg-ground-contact-time",
+      "display": "Average ground contact time"
+     },
+     {
+      "code": "workout-avg-vertical-oscillation",
+      "display": "Average vertical oscillation"
+     },
+     {
+      "code": "workout-avg-vertical-ratio",
+      "display": "Average vertical ratio"
+     },
+     {
+      "code": "workout-aerobic-training-effect",
+      "display": "Aerobic training effect"
+     },
+     {
+      "code": "workout-anaerobic-training-effect",
+      "display": "Anaerobic training effect"
+     },
+     {
+      "code": "workout-training-effect-label",
+      "display": "Primary training benefit"
+     },
+     {
+      "code": "workout-training-load",
+      "display": "Training load"
+     },
+     {
+      "code": "workout-body-battery-change",
+      "display": "Body Battery change during the workout"
+     },
+     {
+      "code": "workout-stamina-start",
+      "display": "Stamina at start"
+     },
+     {
+      "code": "workout-stamina-end",
+      "display": "Stamina at end"
+     },
+     {
+      "code": "workout-impact-load",
+      "display": "Impact load"
+     },
+     {
+      "code": "workout-feel",
+      "display": "Self-reported feel"
+     },
+     {
+      "code": "workout-rpe",
+      "display": "Self-reported perceived exertion"
+     },
+     {
+      "code": "workout-sweat-loss",
+      "display": "Estimated sweat loss"
+     },
+     {
+      "code": "workout-hr-zone-1-time",
+      "display": "Time in heart-rate zone 1"
+     },
+     {
+      "code": "workout-hr-zone-2-time",
+      "display": "Time in heart-rate zone 2"
+     },
+     {
+      "code": "workout-hr-zone-3-time",
+      "display": "Time in heart-rate zone 3"
+     },
+     {
+      "code": "workout-hr-zone-4-time",
+      "display": "Time in heart-rate zone 4"
+     },
+     {
+      "code": "workout-hr-zone-5-time",
+      "display": "Time in heart-rate zone 5"
+     },
+     {
+      "code": "workout-power-zone-1-time",
+      "display": "Time in power zone 1"
+     },
+     {
+      "code": "workout-power-zone-2-time",
+      "display": "Time in power zone 2"
+     },
+     {
+      "code": "workout-power-zone-3-time",
+      "display": "Time in power zone 3"
+     },
+     {
+      "code": "workout-power-zone-4-time",
+      "display": "Time in power zone 4"
+     },
+     {
+      "code": "workout-power-zone-5-time",
+      "display": "Time in power zone 5"
+     }
+    ]
+   }
+  ]
+ }
+}

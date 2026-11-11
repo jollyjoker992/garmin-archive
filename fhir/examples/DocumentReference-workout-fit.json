@@ -1,0 +1,36 @@
+{
+ "resourceType": "DocumentReference",
+ "id": "workout-fit",
+ "identifier": [
+  {
+   "system": "https://github.com/jollyjoker992/garmin-archive/fhir/identifier/document",
+   "value": "activity/20000000001/original"
+  }
+ ],
+ "status": "current",
+ "type": {
+  "text": "Garmin activity recording (FIT file in ZIP)"
+ },
+ "subject": {
+  "reference": "Patient/example"
+ },
+ "date": "2026-09-30T12:11:46+00:00",
+ "content": [
+  {
+   "attachment": {
+    "contentType": "application/zip",
+    "url": "Binary/example",
+    "size": 86993,
+    "hash": "2jmj7l5rSw0yVb/vlWAYkK/YBwk=",
+    "title": "20000000001_ACTIVITY.zip",
+    "creation": "2026-09-30T11:20:41+00:00"
+   }
+  }
+ ],
+ "context": {
+  "period": {
+   "start": "2026-09-30T18:20:41+07:00",
+   "end": "2026-09-30T19:02:50+07:00"
+  }
+ }
+}

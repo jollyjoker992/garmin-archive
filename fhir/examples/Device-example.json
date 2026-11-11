@@ -1,0 +1,20 @@
+{
+ "resourceType": "Device",
+ "id": "example",
+ "identifier": [
+  {
+   "system": "https://github.com/jollyjoker992/garmin-archive/fhir/identifier/garmin-device",
+   "value": "3000000001"
+  }
+ ],
+ "manufacturer": "Garmin",
+ "deviceName": [
+  {
+   "name": "Forerunner 265",
+   "type": "model-name"
+  }
+ ],
+ "patient": {
+  "reference": "Patient/example"
+ }
+}

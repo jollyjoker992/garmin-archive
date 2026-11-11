@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "garmin-medplum": {
+      "type": "http",
+      "url": "http://localhost:8103/mcp/stream",
+      "headersHelper": "python3 tools/medplum_agent.py headers"
+    }
+  }
+}

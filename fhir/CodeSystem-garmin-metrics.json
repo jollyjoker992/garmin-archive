@@ -1,0 +1,2028 @@
+{
+ "resourceType": "CodeSystem",
+ "id": "garmin-metrics",
+ "url": "https://github.com/jollyjoker992/garmin-archive/fhir/CodeSystem/garmin-metrics",
+ "version": "0.1.1",
+ "name": "GarminMetrics",
+ "title": "Garmin metrics without a standard code",
+ "status": "draft",
+ "experimental": false,
+ "publisher": "garmin-archive",
+ "description": "Codes for Garmin Connect measurements that have no correct LOINC code. Values that do have one (heart rate, steps, sleep durations, SpO2, weight and others) use LOINC instead; see docs/fhir-mapping.md. Each concept states its unit, scale and the Garmin field it comes from. Group concepts are not selectable and only organise the codes.",
+ "caseSensitive": true,
+ "hierarchyMeaning": "is-a",
+ "content": "complete",
+ "property": [
+  {
+   "code": "notSelectable",
+   "uri": "http://hl7.org/fhir/concept-properties#notSelectable",
+   "type": "boolean",
+   "description": "Group concept; never used as an Observation code."
+  },
+  {
+   "code": "unit",
+   "type": "string",
+   "description": "UCUM unit the value is recorded in. Absent for text values."
+  },
+  {
+   "code": "valueType",
+   "type": "string",
+   "description": "FHIR value type used: Quantity, SampledData or CodeableConcept (text only)."
+  },
+  {
+   "code": "garminField",
+   "type": "string",
+   "description": "Source file and JSON path in the raw archive."
+  }
+ ],
+ "concept": [
+  {
+   "code": "daily-activity",
+   "display": "Daily activity",
+   "definition": "Whole-day movement totals that have no matching LOINC code.",
+   "property": [
+    {
+     "code": "notSelectable",
+     "valueBoolean": true
+    }
+   ],
+   "concept": [
+    {
+     "code": "active-calories",
+     "display": "Active calories burned, daily total",
+     "definition": "Calories burned above resting metabolism during the calendar day, estimated by Garmin from heart rate and movement.",
+     "property": [
+      {
+       "code": "unit",
+       "valueString": "kcal"
+      },
+      {
+       "code": "valueType",
+       "valueString": "Quantity"
+      },
+      {
+       "code": "garminField",
+       "valueString": "daily_summary.json data[].calories.burnedActive"
+      }
+     ]
+    },
+    {
+     "code": "resting-calories",
+     "display": "Resting calories burned, daily total",
+     "definition": "Calories Garmin attributes to basal metabolism for the calendar day, estimated from age, sex, height and weight. Not a measured resting metabolic rate.",
+     "property": [
+      {
+       "code": "unit",
+       "valueString": "kcal"
+      },
+      {
+       "code": "valueType",
+       "valueString": "Quantity"
+      },
+      {
+       "code": "garminField",
+       "valueString": "daily_summary.json data[].calories.burnedResting"
+      }
+     ]
+    },
+    {
+     "code": "floors-descended",
+     "display": "Floors descended, daily total",
+     "definition": "Number of floors (about 3 m of altitude each, from the barometer) walked down during the calendar day.",
+     "property": [
+      {
+       "code": "unit",
+       "valueString": "{#}"
+      },
+      {
+       "code": "valueType",
+       "valueString": "Quantity"
+      },
+      {
+       "code": "garminField",
+       "valueString": "daily_summary.json data[].movement.floorsDescended.value"
+      }
+     ]
+    },
+    {
+     "code": "step-goal",
+     "display": "Daily step goal",
+     "definition": "The step target Garmin set for that day (auto goal or user set). A goal, not a measurement.",
+     "property": [
+      {
+       "code": "unit",
+       "valueString": "{#}"
+      },
+      {
+       "code": "valueType",
+       "valueString": "Quantity"
+      },
+      {
+       "code": "garminField",
+       "valueString": "daily_summary.json data[].movement.steps.goal"
+      }
+     ]
+    },
+    {
+     "code": "floors-goal",
+     "display": "Daily floors-climbed goal",
+     "definition": "The floors-climbed target for that day. A goal, not a measurement.",
+     "property": [
+      {
+       "code": "unit",
+       "valueString": "{#}"
+      },
+      {
+       "code": "valueType",
+       "valueString": "Quantity"
+      },
+      {
+       "code": "garminField",
+       "valueString": "daily_summary.json data[].movement.floorsAscended.goal"
+      }
+     ]
+    },
+    {
+     "code": "intensity-minutes-goal",
+     "display": "Weekly intensity minutes goal",
+     "definition": "Weekly target for intensity minutes, where vigorous minutes count double. A goal, not a measurement.",
+     "property": [
+      {
+       "code": "unit",
+       "valueString": "min"
+      },
+      {
+       "code": "valueType",
+       "valueString": "Quantity"
+      },
+      {
+       "code": "garminField",
+       "valueString": "daily_summary.json data[].intensityMinutes.goal"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "code": "heart-rate",
+   "display": "Heart rate",
+   "definition": "Heart-rate statistics that have no matching LOINC code.",
+   "property": [
+    {
+     "code": "notSelectable",
+     "valueBoolean": true
+    }
+   ],
+   "concept": [
+    {
+     "code": "resting-hr-7day-avg",
+     "display": "Resting heart rate, 7-day average",
+     "definition": "Average of the daily resting heart rate over the 7 days ending on this day, as calculated by Garmin.",
+     "property": [
+      {
+       "code": "unit",
+       "valueString": "/min"
+      },
+      {
+       "code": "valueType",
+       "valueString": "Quantity"
+      },
+      {
+       "code": "garminField",
+       "valueString": "heart_rate.json lastSevenDaysAvgRestingHeartRate"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "code": "stress",
+   "display": "Stress",
+   "definition": "Garmin stress score. Calculated by the watch from heart-rate variability while the wearer is not moving. Scale 0-100: 0-25 rest, 26-50 low, 51-75 medium, 76-100 high. Not a psychological or self-reported stress measure, so LOINC 93038-8 'Stress level' does not apply.",
+   "property": [
+    {
+     "code": "notSelectable",
+     "valueBoolean": true
+    }
+   ],
+   "concept": [
+    {
+     "code": "stress-avg",
+     "display": "Stress score, daily average",
+     "definition": "Average Garmin stress score (0-100) over the measured part of the day. Lower is more relaxed.",
+     "property": [
+      {
+       "code": "unit",
+       "valueString": "{score}"
+      },
+      {
+       "code": "valueType",
+       "valueString": "Quantity"
+      },
+      {
+       "code": "garminField",
+       "valueString": "daily_summary.json data[].stress.avgLevel"
+      }
+     ]
+    },
+    {
+     "code": "stress-max",
+     "display": "Stress score, daily maximum",
+     "definition": "Highest Garmin stress score (0-100) of the day.",
+     "property": [
+      {
+       "code": "unit",
+       "valueString": "{score}"
+      },
+      {
+       "code": "valueType",
+       "valueString": "Quantity"
+      },
+      {
+       "code": "garminField",
+       "valueString": "daily_summary.json data[].stress.maxLevel"
+      }
+     ]
+    },
+    {
+     "code": "stress-rest-duration",
+     "display": "Time at rest stress level",
+     "definition": "Time during the day with a stress score of 0-25.",
+     "property": [
+      {
+       "code": "unit",
+       "valueString": "min"
+      },
+      {
+       "code": "valueType",
+       "valueString": "Quantity"
+      },
+      {
+       "code": "garminField",
+       "valueString": "daily_summary.json data[].stress.restDurationInMillis"
+      }
+     ]
+    },
+    {
+     "code": "stress-low-duration",
+     "display": "Time at low stress level",
+     "definition": "Time during the day with a stress score of 26-50.",
+     "property": [
+      {
+       "code": "unit",
+       "valueString": "min"
+      },
+      {
+       "code": "valueType",
+       "valueString": "Quantity"
+      },
+      {
+       "code": "garminField",
+       "valueString": "daily_summary.json data[].stress.lowStressDurationInMillis"
+      }
+     ]
+    },
+    {
+     "code": "stress-medium-duration",
+     "display": "Time at medium stress level",
+     "definition": "Time during the day with a stress score of 51-75.",
+     "property": [
+      {
+       "code": "unit",
+       "valueString": "min"
+      },
+      {
+       "code": "valueType",
+       "valueString": "Quantity"
+      },
+      {
+       "code": "garminField",
+       "valueString": "daily_summary.json data[].stress.mediumStressDurationInMillis"
+      }
+     ]
+    },
+    {
+     "code": "stress-high-duration",
+     "display": "Time at high stress level",
+     "definition": "Time during the day with a stress score of 76-100.",
+     "property": [
+      {
+       "code": "unit",
+       "valueString": "min"
+      },
+      {
+       "code": "valueType",
+       "valueString": "Quantity"
+      },
+      {
+       "code": "garminField",
+       "valueString": "daily_summary.json data[].stress.highStressDurationInMillis"
+      }
+     ]
+    },
+    {
+     "code": "stress-activity-duration",
+     "display": "Time too active to measure stress",
+     "definition": "Time during the day when movement prevented a stress reading.",
+     "property": [
+      {
+       "code": "unit",
+       "valueString": "min"
+      },
+      {
+       "code": "valueType",
+       "valueString": "Quantity"
+      },
+      {
+       "code": "garminField",
+       "valueString": "daily_summary.json data[].stress.activityDurationInMillis"
+      }
+     ]
+    },
+    {
+     "code": "stress-uncategorized-duration",
+     "display": "Time without a stress reading",
+     "definition": "Time during the day with no stress reading, for example when the watch was off the wrist.",
+     "property": [
+      {
+       "code": "unit",
+       "valueString": "min"
+      },
+      {
+       "code": "valueType",
+       "valueString": "Quantity"
+      },
+      {
+       "code": "garminField",
+       "valueString": "daily_summary.json data[].stress.uncategorizedDurationInMillis"
+      }
+     ]
+    },
+    {
+     "code": "stress-qualifier",
+     "display": "Stress day qualifier",
+     "definition": "Garmin's one-word label for the day's stress, as text, for example 'balanced'.",
+     "property": [
+      {
+       "code": "valueType",
+       "valueString": "CodeableConcept"
+      },
+      {
+       "code": "garminField",
+       "valueString": "daily_summary.json data[].stress.qualifier"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "code": "body-battery",
+   "display": "Body Battery",
+   "definition": "Garmin Body Battery: a proprietary 0-100 estimate of energy reserves, calculated from heart-rate variability, stress, sleep and activity. Higher means more energy in reserve. It has no clinical equivalent.",
+   "property": [
+    {
+     "code": "notSelectable",
+     "valueBoolean": true
+    }
+   ],
+   "concept": [
+    {
+     "code": "body-battery-level",
+     "display": "Body Battery level",
+     "definition": "Body Battery value (0-100) at a point in time.",
+     "property": [
+      {
+       "code": "unit",
+       "valueString": "{score}"
+      },
+      {
+       "code": "valueType",
+       "valueString": "Quantity"
+      },
+      {
+       "code": "garminField",
+       "valueString": "body_battery.json [].bodyBatteryValuesArray[][1]"
+      }
+     ]
+    },
+    {
+     "code": "body-battery-max",
+     "display": "Body Battery, daily maximum",
+     "definition": "Highest Body Battery value (0-100) of the calendar day, usually just after waking.",
+     "property": [
+      {
+       "code": "unit",
+       "valueString": "{score}"
+      },
+      {
+       "code": "valueType",
+       "valueString": "Quantity"
+      },
+      {
+       "code": "garminField",
+       "valueString": "daily_summary.json data[].bodyBattery.maxValue"
+      }
+     ]
+    },
+    {
+     "code": "body-battery-min",
+     "display": "Body Battery, daily minimum",
+     "definition": "Lowest Body Battery value (0-100) of the calendar day.",
+     "property": [
+      {
+       "code": "unit",
+       "valueString": "{score}"
+      },
+      {
+       "code": "valueType",
+       "valueString": "Quantity"
+      },
+      {
+       "code": "garminField",
+       "valueString": "daily_summary.json data[].bodyBattery.minValue"
+      }
+     ]
+    },
+    {
+     "code": "body-battery-end",
+     "display": "Body Battery, end of day",
+     "definition": "Body Battery value (0-100) at the end of the calendar day, or at the last sync for a day still in progress.",
+     "property": [
+      {
+       "code": "unit",
+       "valueString": "{score}"
+      },
+      {
+       "code": "valueType",
+       "valueString": "Quantity"
+      },
+      {
+       "code": "garminField",
+       "valueString": "daily_summary.json data[].bodyBattery.latestValue"
+      }
+     ]
+    },
+    {
+     "code": "body-battery-charged",
+     "display": "Body Battery charged during the day",
+     "definition": "Total points gained during the calendar day, mostly during sleep and rest.",
+     "property": [
+      {
+       "code": "unit",
+       "valueString": "{score}"
+      },
+      {
+       "code": "valueType",
+       "valueString": "Quantity"
+      },
+      {
+       "code": "garminField",
+       "valueString": "daily_summary.json data[].bodyBattery.chargedValue"
+      }
+     ]
+    },
+    {
+     "code": "body-battery-drained",
+     "display": "Body Battery drained during the day",
+     "definition": "Total points lost during the calendar day, from activity and stress.",
+     "property": [
+      {
+       "code": "unit",
+       "valueString": "{score}"
+      },
+      {
+       "code": "valueType",
+       "valueString": "Quantity"
+      },
+      {
+       "code": "garminField",
+       "valueString": "daily_summary.json data[].bodyBattery.drainedValue"
+      }
+     ]
+    },
+    {
+     "code": "body-battery-event-impact",
+     "display": "Body Battery change during an event",
+     "definition": "Points gained (positive) or lost (negative) during one event such as a night's sleep or a workout.",
+     "property": [
+      {
+       "code": "unit",
+       "valueString": "{score}"
+      },
+      {
+       "code": "valueType",
+       "valueString": "Quantity"
+      },
+      {
+       "code": "garminField",
+       "valueString": "body_battery.json [].bodyBatteryActivityEvent[].bodyBatteryImpact"
+      }
+     ]
+    },
+    {
+     "code": "body-battery-event-type",
+     "display": "Body Battery event type",
+     "definition": "Kind of event as Garmin labels it, as text, for example 'SLEEP'.",
+     "property": [
+      {
+       "code": "valueType",
+       "valueString": "CodeableConcept"
+      },
+      {
+       "code": "garminField",
+       "valueString": "body_battery.json [].bodyBatteryActivityEvent[].eventType"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "code": "hrv",
+   "display": "Heart-rate variability",
+   "definition": "Overnight heart-rate variability measured by the Garmin wrist sensor. Garmin reports RMSSD (root mean square of successive differences between R-R intervals). LOINC 80404-7 and 112429-6 are SDNN, a different statistic, so they must not be used for these values.",
+   "property": [
+    {
+     "code": "notSelectable",
+     "valueBoolean": true
+    }
+   ],
+   "concept": [
+    {
+     "code": "hrv-rmssd-night-avg",
+     "display": "HRV (RMSSD), overnight average",
+     "definition": "Average RMSSD during the sleep that ends on this calendar day. Higher is generally better, but compare with the person's own baseline rather than with other people.",
+     "property": [
+      {
+       "code": "unit",
+       "valueString": "ms"
+      },
+      {
+       "code": "valueType",
+       "valueString": "Quantity"
+      },
+      {
+       "code": "garminField",
+       "valueString": "hrv.json hrvSummary.lastNightAvg"
+      }
+     ]
+    },
+    {
+     "code": "hrv-rmssd-night-5min-high",
+     "display": "HRV (RMSSD), highest 5-minute value overnight",
+     "definition": "Highest 5-minute RMSSD average during that sleep.",
+     "property": [
+      {
+       "code": "unit",
+       "valueString": "ms"
+      },
+      {
+       "code": "valueType",
+       "valueString": "Quantity"
+      },
+      {
+       "code": "garminField",
+       "valueString": "hrv.json hrvSummary.lastNight5MinHigh"
+      }
+     ]
+    },
+    {
+     "code": "hrv-rmssd-7day-avg",
+     "display": "HRV (RMSSD), 7-day average",
+     "definition": "Average of the nightly RMSSD values over the last 7 nights.",
+     "property": [
+      {
+       "code": "unit",
+       "valueString": "ms"
+      },
+      {
+       "code": "valueType",
+       "valueString": "Quantity"
+      },
+      {
+       "code": "garminField",
+       "valueString": "hrv.json hrvSummary.weeklyAvg"
+      }
+     ]
+    },
+    {
+     "code": "hrv-baseline-low-upper",
+     "display": "HRV baseline, upper bound of 'low'",
+     "definition": "Personal baseline from Garmin: 7-day averages below this are 'low'.",
+     "property": [
+      {
+       "code": "unit",
+       "valueString": "ms"
+      },
+      {
+       "code": "valueType",
+       "valueString": "Quantity"
+      },
+      {
+       "code": "garminField",
+       "valueString": "hrv.json hrvSummary.baseline.lowUpper"
+      }
+     ]
+    },
+    {
+     "code": "hrv-baseline-balanced-low",
+     "display": "HRV baseline, lower bound of 'balanced'",
+     "definition": "Personal baseline from Garmin: lower end of the balanced range.",
+     "property": [
+      {
+       "code": "unit",
+       "valueString": "ms"
+      },
+      {
+       "code": "valueType",
+       "valueString": "Quantity"
+      },
+      {
+       "code": "garminField",
+       "valueString": "hrv.json hrvSummary.baseline.balancedLow"
+      }
+     ]
+    },
+    {
+     "code": "hrv-baseline-balanced-upper",
+     "display": "HRV baseline, upper bound of 'balanced'",
+     "definition": "Personal baseline from Garmin: upper end of the balanced range.",
+     "property": [
+      {
+       "code": "unit",
+       "valueString": "ms"
+      },
+      {
+       "code": "valueType",
+       "valueString": "Quantity"
+      },
+      {
+       "code": "garminField",
+       "valueString": "hrv.json hrvSummary.baseline.balancedUpper"
+      }
+     ]
+    },
+    {
+     "code": "hrv-status",
+     "display": "HRV status",
+     "definition": "Garmin's label comparing the 7-day average with the baseline, as text: BALANCED, UNBALANCED, LOW, POOR or NONE.",
+     "property": [
+      {
+       "code": "valueType",
+       "valueString": "CodeableConcept"
+      },
+      {
+       "code": "garminField",
+       "valueString": "hrv.json hrvSummary.status"
+      }
+     ]
+    },
+    {
+     "code": "hrv-rmssd-readings",
+     "display": "HRV (RMSSD) readings during sleep",
+     "definition": "RMSSD values every 5 minutes during sleep, as a time series.",
+     "property": [
+      {
+       "code": "unit",
+       "valueString": "ms"
+      },
+      {
+       "code": "valueType",
+       "valueString": "SampledData"
+      },
+      {
+       "code": "garminField",
+       "valueString": "hrv.json hrvReadings[]"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "code": "sleep",
+   "display": "Sleep",
+   "definition": "Sleep values from the Garmin wrist sensor that have no matching LOINC code. The sleep belongs to the calendar day on which it ends.",
+   "property": [
+    {
+     "code": "notSelectable",
+     "valueBoolean": true
+    }
+   ],
+   "concept": [
+    {
+     "code": "sleep-nap-duration",
+     "display": "Nap time",
+     "definition": "Total daytime nap time attributed to the day.",
+     "property": [
+      {
+       "code": "unit",
+       "valueString": "min"
+      },
+      {
+       "code": "valueType",
+       "valueString": "Quantity"
+      },
+      {
+       "code": "garminField",
+       "valueString": "sleep.json napTimeSeconds"
+      }
+     ]
+    },
+    {
+     "code": "sleep-unmeasurable-duration",
+     "display": "Unmeasurable sleep time",
+     "definition": "Time in the sleep window that the watch could not classify.",
+     "property": [
+      {
+       "code": "unit",
+       "valueString": "min"
+      },
+      {
+       "code": "valueType",
+       "valueString": "Quantity"
+      },
+      {
+       "code": "garminField",
+       "valueString": "sleep.json unmeasurableSleepSeconds"
+      }
+     ]
+    },
+    {
+     "code": "sleep-awake-count",
+     "display": "Number of awakenings",
+     "definition": "Times the wearer woke during the sleep window.",
+     "property": [
+      {
+       "code": "unit",
+       "valueString": "{#}"
+      },
+      {
+       "code": "valueType",
+       "valueString": "Quantity"
+      },
+      {
+       "code": "garminField",
+       "valueString": "sleep.json awakeCount"
+      }
+     ]
+    },
+    {
+     "code": "sleep-avg-stress",
+     "display": "Stress score during sleep, average",
+     "definition": "Average Garmin stress score (0-100) during sleep.",
+     "property": [
+      {
+       "code": "unit",
+       "valueString": "{score}"
+      },
+      {
+       "code": "valueType",
+       "valueString": "Quantity"
+      },
+      {
+       "code": "garminField",
+       "valueString": "sleep.json avgSleepStress"
+      }
+     ]
+    },
+    {
+     "code": "sleep-avg-hr",
+     "display": "Heart rate during sleep, average",
+     "definition": "Average heart rate during sleep.",
+     "property": [
+      {
+       "code": "unit",
+       "valueString": "/min"
+      },
+      {
+       "code": "valueType",
+       "valueString": "Quantity"
+      },
+      {
+       "code": "garminField",
+       "valueString": "sleep.json avgHeartRate"
+      }
+     ]
+    },
+    {
+     "code": "sleep-avg-respiration",
+     "display": "Respiratory rate during sleep, average",
+     "definition": "Average breaths per minute during sleep.",
+     "property": [
+      {
+       "code": "unit",
+       "valueString": "/min"
+      },
+      {
+       "code": "valueType",
+       "valueString": "Quantity"
+      },
+      {
+       "code": "garminField",
+       "valueString": "sleep.json averageRespirationValue"
+      }
+     ]
+    },
+    {
+     "code": "sleep-min-respiration",
+     "display": "Respiratory rate during sleep, lowest",
+     "definition": "Lowest breaths per minute during sleep.",
+     "property": [
+      {
+       "code": "unit",
+       "valueString": "/min"
+      },
+      {
+       "code": "valueType",
+       "valueString": "Quantity"
+      },
+      {
+       "code": "garminField",
+       "valueString": "sleep.json lowestRespirationValue"
+      }
+     ]
+    },
+    {
+     "code": "sleep-max-respiration",
+     "display": "Respiratory rate during sleep, highest",
+     "definition": "Highest breaths per minute during sleep.",
+     "property": [
+      {
+       "code": "unit",
+       "valueString": "/min"
+      },
+      {
+       "code": "valueType",
+       "valueString": "Quantity"
+      },
+      {
+       "code": "garminField",
+       "valueString": "sleep.json highestRespirationValue"
+      }
+     ]
+    },
+    {
+     "code": "sleep-avg-spo2",
+     "display": "SpO2 during sleep, average",
+     "definition": "Average blood-oxygen saturation during sleep, from the wrist pulse oximeter.",
+     "property": [
+      {
+       "code": "unit",
+       "valueString": "%"
+      },
+      {
+       "code": "valueType",
+       "valueString": "Quantity"
+      },
+      {
+       "code": "garminField",
+       "valueString": "sleep.json averageSpO2Value"
+      }
+     ]
+    },
+    {
+     "code": "sleep-min-spo2",
+     "display": "SpO2 during sleep, lowest",
+     "definition": "Lowest blood-oxygen saturation during sleep.",
+     "property": [
+      {
+       "code": "unit",
+       "valueString": "%"
+      },
+      {
+       "code": "valueType",
+       "valueString": "Quantity"
+      },
+      {
+       "code": "garminField",
+       "valueString": "sleep.json lowestSpO2Value"
+      }
+     ]
+    },
+    {
+     "code": "sleep-need",
+     "display": "Sleep need",
+     "definition": "How much sleep Garmin recommended for this night, adjusted for HRV, recent sleep and training.",
+     "property": [
+      {
+       "code": "unit",
+       "valueString": "min"
+      },
+      {
+       "code": "valueType",
+       "valueString": "Quantity"
+      },
+      {
+       "code": "garminField",
+       "valueString": "sleep.json sleepNeed.actual"
+      }
+     ]
+    },
+    {
+     "code": "sleep-score",
+     "display": "Sleep score",
+     "definition": "Garmin's overall sleep score, 0-100. Higher is better. Not comparable with questionnaire-based sleep scores such as LOINC 97891-6.",
+     "property": [
+      {
+       "code": "unit",
+       "valueString": "{score}"
+      },
+      {
+       "code": "valueType",
+       "valueString": "Quantity"
+      },
+      {
+       "code": "garminField",
+       "valueString": "sleep.json sleepScores.overall.value"
+      }
+     ]
+    },
+    {
+     "code": "sleep-score-qualifier",
+     "display": "Sleep score qualifier",
+     "definition": "Garmin's label for the sleep score, as text: EXCELLENT, GOOD, FAIR or POOR.",
+     "property": [
+      {
+       "code": "valueType",
+       "valueString": "CodeableConcept"
+      },
+      {
+       "code": "garminField",
+       "valueString": "sleep.json sleepScores.overall.qualifierKey"
+      }
+     ]
+    },
+    {
+     "code": "sleep-deep-pct",
+     "display": "Deep sleep, share of total sleep",
+     "definition": "Deep sleep as a percentage of total sleep time.",
+     "property": [
+      {
+       "code": "unit",
+       "valueString": "%"
+      },
+      {
+       "code": "valueType",
+       "valueString": "Quantity"
+      },
+      {
+       "code": "garminField",
+       "valueString": "sleep.json sleepScores.deepPercentage.value"
+      }
+     ]
+    },
+    {
+     "code": "sleep-light-pct",
+     "display": "Light sleep, share of total sleep",
+     "definition": "Light sleep as a percentage of total sleep time.",
+     "property": [
+      {
+       "code": "unit",
+       "valueString": "%"
+      },
+      {
+       "code": "valueType",
+       "valueString": "Quantity"
+      },
+      {
+       "code": "garminField",
+       "valueString": "sleep.json sleepScores.lightPercentage.value"
+      }
+     ]
+    },
+    {
+     "code": "sleep-rem-pct",
+     "display": "REM sleep, share of total sleep",
+     "definition": "REM sleep as a percentage of total sleep time.",
+     "property": [
+      {
+       "code": "unit",
+       "valueString": "%"
+      },
+      {
+       "code": "valueType",
+       "valueString": "Quantity"
+      },
+      {
+       "code": "garminField",
+       "valueString": "sleep.json sleepScores.remPercentage.value"
+      }
+     ]
+    },
+    {
+     "code": "sleep-duration-qualifier",
+     "display": "Sleep duration qualifier",
+     "definition": "Garmin's label for total sleep time, as text.",
+     "property": [
+      {
+       "code": "valueType",
+       "valueString": "CodeableConcept"
+      },
+      {
+       "code": "garminField",
+       "valueString": "sleep.json sleepScores.totalDuration.qualifierKey"
+      }
+     ]
+    },
+    {
+     "code": "sleep-deep-qualifier",
+     "display": "Deep sleep qualifier",
+     "definition": "Garmin's label for the deep sleep share, as text.",
+     "property": [
+      {
+       "code": "valueType",
+       "valueString": "CodeableConcept"
+      },
+      {
+       "code": "garminField",
+       "valueString": "sleep.json sleepScores.deepPercentage.qualifierKey"
+      }
+     ]
+    },
+    {
+     "code": "sleep-light-qualifier",
+     "display": "Light sleep qualifier",
+     "definition": "Garmin's label for the light sleep share, as text.",
+     "property": [
+      {
+       "code": "valueType",
+       "valueString": "CodeableConcept"
+      },
+      {
+       "code": "garminField",
+       "valueString": "sleep.json sleepScores.lightPercentage.qualifierKey"
+      }
+     ]
+    },
+    {
+     "code": "sleep-rem-qualifier",
+     "display": "REM sleep qualifier",
+     "definition": "Garmin's label for the REM sleep share, as text.",
+     "property": [
+      {
+       "code": "valueType",
+       "valueString": "CodeableConcept"
+      },
+      {
+       "code": "garminField",
+       "valueString": "sleep.json sleepScores.remPercentage.qualifierKey"
+      }
+     ]
+    },
+    {
+     "code": "sleep-restlessness-qualifier",
+     "display": "Restlessness qualifier",
+     "definition": "Garmin's label for movement during sleep, as text.",
+     "property": [
+      {
+       "code": "valueType",
+       "valueString": "CodeableConcept"
+      },
+      {
+       "code": "garminField",
+       "valueString": "sleep.json sleepScores.restlessness.qualifierKey"
+      }
+     ]
+    },
+    {
+     "code": "sleep-awake-count-qualifier",
+     "display": "Awakenings qualifier",
+     "definition": "Garmin's label for the number of awakenings, as text.",
+     "property": [
+      {
+       "code": "valueType",
+       "valueString": "CodeableConcept"
+      },
+      {
+       "code": "garminField",
+       "valueString": "sleep.json sleepScores.awakeCount.qualifierKey"
+      }
+     ]
+    },
+    {
+     "code": "sleep-stress-qualifier",
+     "display": "Sleep stress qualifier",
+     "definition": "Garmin's label for stress during sleep, as text.",
+     "property": [
+      {
+       "code": "valueType",
+       "valueString": "CodeableConcept"
+      },
+      {
+       "code": "garminField",
+       "valueString": "sleep.json sleepScores.stress.qualifierKey"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "code": "oxygen-respiration",
+   "display": "Blood oxygen and respiration",
+   "definition": "Daily SpO2 and respiration statistics that have no matching LOINC code. Measured by the wrist pulse oximeter; less accurate than a clinical finger oximeter.",
+   "property": [
+    {
+     "code": "notSelectable",
+     "valueBoolean": true
+    }
+   ],
+   "concept": [
+    {
+     "code": "spo2-daily-min",
+     "display": "SpO2, daily lowest",
+     "definition": "Lowest blood-oxygen reading of the calendar day.",
+     "property": [
+      {
+       "code": "unit",
+       "valueString": "%"
+      },
+      {
+       "code": "valueType",
+       "valueString": "Quantity"
+      },
+      {
+       "code": "garminField",
+       "valueString": "daily_summary.json data[].pulseOx.minValue"
+      }
+     ]
+    },
+    {
+     "code": "respiration-daily-min",
+     "display": "Respiratory rate, daily lowest",
+     "definition": "Lowest breaths per minute of the calendar day.",
+     "property": [
+      {
+       "code": "unit",
+       "valueString": "/min"
+      },
+      {
+       "code": "valueType",
+       "valueString": "Quantity"
+      },
+      {
+       "code": "garminField",
+       "valueString": "daily_summary.json data[].respiration.minValue"
+      }
+     ]
+    },
+    {
+     "code": "respiration-daily-max",
+     "display": "Respiratory rate, daily highest",
+     "definition": "Highest breaths per minute of the calendar day.",
+     "property": [
+      {
+       "code": "unit",
+       "valueString": "/min"
+      },
+      {
+       "code": "valueType",
+       "valueString": "Quantity"
+      },
+      {
+       "code": "garminField",
+       "valueString": "daily_summary.json data[].respiration.maxValue"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "code": "fitness-age",
+   "display": "Fitness age",
+   "definition": "Garmin fitness age: an estimate of the age the person's fitness corresponds to, from resting heart rate, BMI and vigorous activity. Lower than the real age is better.",
+   "property": [
+    {
+     "code": "notSelectable",
+     "valueBoolean": true
+    }
+   ],
+   "concept": [
+    {
+     "code": "fitness-age",
+     "display": "Fitness age",
+     "definition": "Garmin's estimated fitness age in years.",
+     "property": [
+      {
+       "code": "unit",
+       "valueString": "a"
+      },
+      {
+       "code": "valueType",
+       "valueString": "Quantity"
+      },
+      {
+       "code": "garminField",
+       "valueString": "fitness_age.json fitnessAge"
+      }
+     ]
+    },
+    {
+     "code": "fitness-age-achievable",
+     "display": "Achievable fitness age",
+     "definition": "Fitness age Garmin estimates the person could reach by meeting its targets.",
+     "property": [
+      {
+       "code": "unit",
+       "valueString": "a"
+      },
+      {
+       "code": "valueType",
+       "valueString": "Quantity"
+      },
+      {
+       "code": "garminField",
+       "valueString": "fitness_age.json achievableFitnessAge"
+      }
+     ]
+    },
+    {
+     "code": "vigorous-days-weekly-avg",
+     "display": "Vigorous activity days per week, 6-week average",
+     "definition": "Average number of days per week with vigorous activity, used by fitness age.",
+     "property": [
+      {
+       "code": "unit",
+       "valueString": "/wk"
+      },
+      {
+       "code": "valueType",
+       "valueString": "Quantity"
+      },
+      {
+       "code": "garminField",
+       "valueString": "fitness_age.json components.vigorousDaysAvg.value"
+      }
+     ]
+    },
+    {
+     "code": "vigorous-minutes-weekly-avg",
+     "display": "Vigorous minutes per week, 6-week average",
+     "definition": "Average vigorous-activity minutes per week, used by fitness age.",
+     "property": [
+      {
+       "code": "unit",
+       "valueString": "min/wk"
+      },
+      {
+       "code": "valueType",
+       "valueString": "Quantity"
+      },
+      {
+       "code": "garminField",
+       "valueString": "fitness_age.json components.vigorousMinutesAvg.value"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "code": "workout",
+   "display": "Workout",
+   "definition": "Values for one recorded workout (activity) that have no matching LOINC code. The full per-second recording is in the attached FIT file.",
+   "property": [
+    {
+     "code": "notSelectable",
+     "valueBoolean": true
+    }
+   ],
+   "concept": [
+    {
+     "code": "workout-distance",
+     "display": "Workout distance",
+     "definition": "Distance covered during the workout.",
+     "property": [
+      {
+       "code": "unit",
+       "valueString": "m"
+      },
+      {
+       "code": "valueType",
+       "valueString": "Quantity"
+      },
+      {
+       "code": "garminField",
+       "valueString": "activities.json [].distance"
+      }
+     ]
+    },
+    {
+     "code": "workout-elapsed-duration",
+     "display": "Workout elapsed time",
+     "definition": "Time from start to end, pauses included.",
+     "property": [
+      {
+       "code": "unit",
+       "valueString": "min"
+      },
+      {
+       "code": "valueType",
+       "valueString": "Quantity"
+      },
+      {
+       "code": "garminField",
+       "valueString": "activities.json [].elapsedDuration"
+      }
+     ]
+    },
+    {
+     "code": "workout-moving-duration",
+     "display": "Workout moving time",
+     "definition": "Time spent moving.",
+     "property": [
+      {
+       "code": "unit",
+       "valueString": "min"
+      },
+      {
+       "code": "valueType",
+       "valueString": "Quantity"
+      },
+      {
+       "code": "garminField",
+       "valueString": "activities.json [].movingDuration"
+      }
+     ]
+    },
+    {
+     "code": "workout-steps",
+     "display": "Workout steps",
+     "definition": "Steps taken during the workout.",
+     "property": [
+      {
+       "code": "unit",
+       "valueString": "{#}"
+      },
+      {
+       "code": "valueType",
+       "valueString": "Quantity"
+      },
+      {
+       "code": "garminField",
+       "valueString": "activities.json [].steps"
+      }
+     ]
+    },
+    {
+     "code": "workout-avg-speed",
+     "display": "Average speed",
+     "definition": "Distance divided by timer time.",
+     "property": [
+      {
+       "code": "unit",
+       "valueString": "m/s"
+      },
+      {
+       "code": "valueType",
+       "valueString": "Quantity"
+      },
+      {
+       "code": "garminField",
+       "valueString": "activities.json [].averageSpeed"
+      }
+     ]
+    },
+    {
+     "code": "workout-max-speed",
+     "display": "Maximum speed",
+     "definition": "Highest speed recorded.",
+     "property": [
+      {
+       "code": "unit",
+       "valueString": "m/s"
+      },
+      {
+       "code": "valueType",
+       "valueString": "Quantity"
+      },
+      {
+       "code": "garminField",
+       "valueString": "activities.json [].maxSpeed"
+      }
+     ]
+    },
+    {
+     "code": "workout-avg-grade-adjusted-speed",
+     "display": "Average grade-adjusted speed",
+     "definition": "Average speed corrected for uphill and downhill, as the equivalent speed on flat ground.",
+     "property": [
+      {
+       "code": "unit",
+       "valueString": "m/s"
+      },
+      {
+       "code": "valueType",
+       "valueString": "Quantity"
+      },
+      {
+       "code": "garminField",
+       "valueString": "activities.json [].avgGradeAdjustedSpeed"
+      }
+     ]
+    },
+    {
+     "code": "workout-elevation-gain",
+     "display": "Elevation gain",
+     "definition": "Total climb during the workout.",
+     "property": [
+      {
+       "code": "unit",
+       "valueString": "m"
+      },
+      {
+       "code": "valueType",
+       "valueString": "Quantity"
+      },
+      {
+       "code": "garminField",
+       "valueString": "activities.json [].elevationGain"
+      }
+     ]
+    },
+    {
+     "code": "workout-elevation-loss",
+     "display": "Elevation loss",
+     "definition": "Total descent during the workout.",
+     "property": [
+      {
+       "code": "unit",
+       "valueString": "m"
+      },
+      {
+       "code": "valueType",
+       "valueString": "Quantity"
+      },
+      {
+       "code": "garminField",
+       "valueString": "activities.json [].elevationLoss"
+      }
+     ]
+    },
+    {
+     "code": "workout-avg-power",
+     "display": "Average power",
+     "definition": "Average running or cycling power.",
+     "property": [
+      {
+       "code": "unit",
+       "valueString": "W"
+      },
+      {
+       "code": "valueType",
+       "valueString": "Quantity"
+      },
+      {
+       "code": "garminField",
+       "valueString": "activities.json [].avgPower"
+      }
+     ]
+    },
+    {
+     "code": "workout-max-power",
+     "display": "Maximum power",
+     "definition": "Highest power recorded.",
+     "property": [
+      {
+       "code": "unit",
+       "valueString": "W"
+      },
+      {
+       "code": "valueType",
+       "valueString": "Quantity"
+      },
+      {
+       "code": "garminField",
+       "valueString": "activities.json [].maxPower"
+      }
+     ]
+    },
+    {
+     "code": "workout-normalized-power",
+     "display": "Normalized power",
+     "definition": "Power adjusted for variability, approximating the physiological cost of the effort.",
+     "property": [
+      {
+       "code": "unit",
+       "valueString": "W"
+      },
+      {
+       "code": "valueType",
+       "valueString": "Quantity"
+      },
+      {
+       "code": "garminField",
+       "valueString": "activities.json [].normPower"
+      }
+     ]
+    },
+    {
+     "code": "workout-avg-cadence",
+     "display": "Average running cadence",
+     "definition": "Average steps per minute.",
+     "property": [
+      {
+       "code": "unit",
+       "valueString": "/min"
+      },
+      {
+       "code": "valueType",
+       "valueString": "Quantity"
+      },
+      {
+       "code": "garminField",
+       "valueString": "activities.json [].averageRunningCadenceInStepsPerMinute"
+      }
+     ]
+    },
+    {
+     "code": "workout-max-cadence",
+     "display": "Maximum running cadence",
+     "definition": "Highest steps per minute.",
+     "property": [
+      {
+       "code": "unit",
+       "valueString": "/min"
+      },
+      {
+       "code": "valueType",
+       "valueString": "Quantity"
+      },
+      {
+       "code": "garminField",
+       "valueString": "activities.json [].maxRunningCadenceInStepsPerMinute"
+      }
+     ]
+    },
+    {
+     "code": "workout-avg-stride-length",
+     "display": "Average stride length",
+     "definition": "Average length of one step.",
+     "property": [
+      {
+       "code": "unit",
+       "valueString": "cm"
+      },
+      {
+       "code": "valueType",
+       "valueString": "Quantity"
+      },
+      {
+       "code": "garminField",
+       "valueString": "activities.json [].avgStrideLength"
+      }
+     ]
+    },
+    {
+     "code": "workout-avg-ground-contact-time",
+     "display": "Average ground contact time",
+     "definition": "Average time each foot is on the ground per step.",
+     "property": [
+      {
+       "code": "unit",
+       "valueString": "ms"
+      },
+      {
+       "code": "valueType",
+       "valueString": "Quantity"
+      },
+      {
+       "code": "garminField",
+       "valueString": "activities.json [].avgGroundContactTime"
+      }
+     ]
+    },
+    {
+     "code": "workout-avg-vertical-oscillation",
+     "display": "Average vertical oscillation",
+     "definition": "Average up-and-down movement of the torso per step.",
+     "property": [
+      {
+       "code": "unit",
+       "valueString": "cm"
+      },
+      {
+       "code": "valueType",
+       "valueString": "Quantity"
+      },
+      {
+       "code": "garminField",
+       "valueString": "activities.json [].avgVerticalOscillation"
+      }
+     ]
+    },
+    {
+     "code": "workout-avg-vertical-ratio",
+     "display": "Average vertical ratio",
+     "definition": "Vertical oscillation divided by stride length. Lower is more efficient.",
+     "property": [
+      {
+       "code": "unit",
+       "valueString": "%"
+      },
+      {
+       "code": "valueType",
+       "valueString": "Quantity"
+      },
+      {
+       "code": "garminField",
+       "valueString": "activities.json [].avgVerticalRatio"
+      }
+     ]
+    },
+    {
+     "code": "workout-aerobic-training-effect",
+     "display": "Aerobic training effect",
+     "definition": "Garmin's 0.0-5.0 estimate of the workout's effect on aerobic fitness.",
+     "property": [
+      {
+       "code": "unit",
+       "valueString": "{score}"
+      },
+      {
+       "code": "valueType",
+       "valueString": "Quantity"
+      },
+      {
+       "code": "garminField",
+       "valueString": "activities.json [].aerobicTrainingEffect"
+      }
+     ]
+    },
+    {
+     "code": "workout-anaerobic-training-effect",
+     "display": "Anaerobic training effect",
+     "definition": "Garmin's 0.0-5.0 estimate of the workout's effect on anaerobic capacity.",
+     "property": [
+      {
+       "code": "unit",
+       "valueString": "{score}"
+      },
+      {
+       "code": "valueType",
+       "valueString": "Quantity"
+      },
+      {
+       "code": "garminField",
+       "valueString": "activities.json [].anaerobicTrainingEffect"
+      }
+     ]
+    },
+    {
+     "code": "workout-training-effect-label",
+     "display": "Primary training benefit",
+     "definition": "Garmin's label for the main benefit, as text, for example 'AEROBIC_BASE'.",
+     "property": [
+      {
+       "code": "valueType",
+       "valueString": "CodeableConcept"
+      },
+      {
+       "code": "garminField",
+       "valueString": "activities.json [].trainingEffectLabel"
+      }
+     ]
+    },
+    {
+     "code": "workout-training-load",
+     "display": "Training load",
+     "definition": "Garmin's estimate of the workout's physiological load (EPOC-based).",
+     "property": [
+      {
+       "code": "unit",
+       "valueString": "{score}"
+      },
+      {
+       "code": "valueType",
+       "valueString": "Quantity"
+      },
+      {
+       "code": "garminField",
+       "valueString": "activities.json [].activityTrainingLoad"
+      }
+     ]
+    },
+    {
+     "code": "workout-body-battery-change",
+     "display": "Body Battery change during the workout",
+     "definition": "Body Battery points gained or lost during the workout. Usually negative.",
+     "property": [
+      {
+       "code": "unit",
+       "valueString": "{score}"
+      },
+      {
+       "code": "valueType",
+       "valueString": "Quantity"
+      },
+      {
+       "code": "garminField",
+       "valueString": "activities.json [].differenceBodyBattery"
+      }
+     ]
+    },
+    {
+     "code": "workout-stamina-start",
+     "display": "Stamina at start",
+     "definition": "Garmin's estimated stamina at the start, 0-100.",
+     "property": [
+      {
+       "code": "unit",
+       "valueString": "%"
+      },
+      {
+       "code": "valueType",
+       "valueString": "Quantity"
+      },
+      {
+       "code": "garminField",
+       "valueString": "activities/<id>/detail.json summaryDTO.beginPotentialStamina"
+      }
+     ]
+    },
+    {
+     "code": "workout-stamina-end",
+     "display": "Stamina at end",
+     "definition": "Garmin's estimated stamina at the end, 0-100.",
+     "property": [
+      {
+       "code": "unit",
+       "valueString": "%"
+      },
+      {
+       "code": "valueType",
+       "valueString": "Quantity"
+      },
+      {
+       "code": "garminField",
+       "valueString": "activities/<id>/detail.json summaryDTO.endPotentialStamina"
+      }
+     ]
+    },
+    {
+     "code": "workout-impact-load",
+     "display": "Impact load",
+     "definition": "Garmin's estimate of the mechanical load on the body from foot strikes.",
+     "property": [
+      {
+       "code": "unit",
+       "valueString": "{score}"
+      },
+      {
+       "code": "valueType",
+       "valueString": "Quantity"
+      },
+      {
+       "code": "garminField",
+       "valueString": "activities/<id>/detail.json summaryDTO.impactLoad"
+      }
+     ]
+    },
+    {
+     "code": "workout-feel",
+     "display": "Self-reported feel",
+     "definition": "How the workout felt, entered by the user on the watch: 0 very weak, 25 weak, 50 normal, 75 strong, 100 very strong.",
+     "property": [
+      {
+       "code": "unit",
+       "valueString": "{score}"
+      },
+      {
+       "code": "valueType",
+       "valueString": "Quantity"
+      },
+      {
+       "code": "garminField",
+       "valueString": "activities/<id>/detail.json summaryDTO.directWorkoutFeel"
+      }
+     ]
+    },
+    {
+     "code": "workout-rpe",
+     "display": "Self-reported perceived exertion",
+     "definition": "Perceived exertion entered by the user, stored by Garmin as 10-100 (10 times the 1-10 RPE scale).",
+     "property": [
+      {
+       "code": "unit",
+       "valueString": "{score}"
+      },
+      {
+       "code": "valueType",
+       "valueString": "Quantity"
+      },
+      {
+       "code": "garminField",
+       "valueString": "activities/<id>/detail.json summaryDTO.directWorkoutRpe"
+      }
+     ]
+    },
+    {
+     "code": "workout-sweat-loss",
+     "display": "Estimated sweat loss",
+     "definition": "Garmin's estimate of fluid lost during the workout.",
+     "property": [
+      {
+       "code": "unit",
+       "valueString": "mL"
+      },
+      {
+       "code": "valueType",
+       "valueString": "Quantity"
+      },
+      {
+       "code": "garminField",
+       "valueString": "activities.json [].waterEstimated"
+      }
+     ]
+    },
+    {
+     "code": "workout-hr-zone-1-time",
+     "display": "Time in heart-rate zone 1",
+     "definition": "Time spent in heart-rate zone 1 (warm up), using the zones in effect when recorded.",
+     "property": [
+      {
+       "code": "unit",
+       "valueString": "min"
+      },
+      {
+       "code": "valueType",
+       "valueString": "Quantity"
+      },
+      {
+       "code": "garminField",
+       "valueString": "activities.json [].hrTimeInZone_1"
+      }
+     ]
+    },
+    {
+     "code": "workout-hr-zone-2-time",
+     "display": "Time in heart-rate zone 2",
+     "definition": "Time spent in heart-rate zone 2 (easy).",
+     "property": [
+      {
+       "code": "unit",
+       "valueString": "min"
+      },
+      {
+       "code": "valueType",
+       "valueString": "Quantity"
+      },
+      {
+       "code": "garminField",
+       "valueString": "activities.json [].hrTimeInZone_2"
+      }
+     ]
+    },
+    {
+     "code": "workout-hr-zone-3-time",
+     "display": "Time in heart-rate zone 3",
+     "definition": "Time spent in heart-rate zone 3 (aerobic).",
+     "property": [
+      {
+       "code": "unit",
+       "valueString": "min"
+      },
+      {
+       "code": "valueType",
+       "valueString": "Quantity"
+      },
+      {
+       "code": "garminField",
+       "valueString": "activities.json [].hrTimeInZone_3"
+      }
+     ]
+    },
+    {
+     "code": "workout-hr-zone-4-time",
+     "display": "Time in heart-rate zone 4",
+     "definition": "Time spent in heart-rate zone 4 (threshold).",
+     "property": [
+      {
+       "code": "unit",
+       "valueString": "min"
+      },
+      {
+       "code": "valueType",
+       "valueString": "Quantity"
+      },
+      {
+       "code": "garminField",
+       "valueString": "activities.json [].hrTimeInZone_4"
+      }
+     ]
+    },
+    {
+     "code": "workout-hr-zone-5-time",
+     "display": "Time in heart-rate zone 5",
+     "definition": "Time spent in heart-rate zone 5 (maximum).",
+     "property": [
+      {
+       "code": "unit",
+       "valueString": "min"
+      },
+      {
+       "code": "valueType",
+       "valueString": "Quantity"
+      },
+      {
+       "code": "garminField",
+       "valueString": "activities.json [].hrTimeInZone_5"
+      }
+     ]
+    },
+    {
+     "code": "workout-power-zone-1-time",
+     "display": "Time in power zone 1",
+     "definition": "Time spent in power zone 1.",
+     "property": [
+      {
+       "code": "unit",
+       "valueString": "min"
+      },
+      {
+       "code": "valueType",
+       "valueString": "Quantity"
+      },
+      {
+       "code": "garminField",
+       "valueString": "activities.json [].powerTimeInZone_1"
+      }
+     ]
+    },
+    {
+     "code": "workout-power-zone-2-time",
+     "display": "Time in power zone 2",
+     "definition": "Time spent in power zone 2.",
+     "property": [
+      {
+       "code": "unit",
+       "valueString": "min"
+      },
+      {
+       "code": "valueType",
+       "valueString": "Quantity"
+      },
+      {
+       "code": "garminField",
+       "valueString": "activities.json [].powerTimeInZone_2"
+      }
+     ]
+    },
+    {
+     "code": "workout-power-zone-3-time",
+     "display": "Time in power zone 3",
+     "definition": "Time spent in power zone 3.",
+     "property": [
+      {
+       "code": "unit",
+       "valueString": "min"
+      },
+      {
+       "code": "valueType",
+       "valueString": "Quantity"
+      },
+      {
+       "code": "garminField",
+       "valueString": "activities.json [].powerTimeInZone_3"
+      }
+     ]
+    },
+    {
+     "code": "workout-power-zone-4-time",
+     "display": "Time in power zone 4",
+     "definition": "Time spent in power zone 4.",
+     "property": [
+      {
+       "code": "unit",
+       "valueString": "min"
+      },
+      {
+       "code": "valueType",
+       "valueString": "Quantity"
+      },
+      {
+       "code": "garminField",
+       "valueString": "activities.json [].powerTimeInZone_4"
+      }
+     ]
+    },
+    {
+     "code": "workout-power-zone-5-time",
+     "display": "Time in power zone 5",
+     "definition": "Time spent in power zone 5.",
+     "property": [
+      {
+       "code": "unit",
+       "valueString": "min"
+      },
+      {
+       "code": "valueType",
+       "valueString": "Quantity"
+      },
+      {
+       "code": "garminField",
+       "valueString": "activities.json [].powerTimeInZone_5"
+      }
+     ]
+    }
+   ]
+  }
+ ]
+}

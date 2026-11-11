@@ -1,0 +1,7 @@
+# Secrets and personal health data never go into git.
+.env
+data/
+__pycache__/
+*.pyc
+.DS_Store
+docker/secrets.env

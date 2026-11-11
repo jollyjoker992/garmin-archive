@@ -1,0 +1,293 @@
+{
+ "$schema": "https://json-schema.org/draft/2020-12/schema",
+ "title": "garmin-archive manifest",
+ "type": "object",
+ "required": [
+  "schema_version",
+  "tool_version",
+  "created_at",
+  "updated_at",
+  "days"
+ ],
+ "properties": {
+  "schema_version": {
+   "const": 1
+  },
+  "tool_version": {
+   "type": "string"
+  },
+  "created_at": {
+   "type": "string",
+   "format": "date-time"
+  },
+  "updated_at": {
+   "type": "string",
+   "format": "date-time"
+  },
+  "last_run": {
+   "type": [
+    "object",
+    "null"
+   ],
+   "properties": {
+    "started_at": {
+     "type": "string",
+     "format": "date-time"
+    },
+    "finished_at": {
+     "type": "string",
+     "format": "date-time"
+    },
+    "exit_code": {
+     "enum": [
+      0,
+      1,
+      2
+     ]
+    },
+    "days_planned": {
+     "type": "integer"
+    },
+    "days_crawled": {
+     "type": "integer"
+    },
+    "days_failed": {
+     "type": "integer"
+    },
+    "days_deferred": {
+     "type": "integer",
+     "description": "Days left for later runs by the per-run limit."
+    },
+    "archived": {
+     "type": "integer"
+    },
+    "uploaded": {
+     "type": "integer"
+    },
+    "upload_failures": {
+     "type": "integer"
+    },
+    "requests": {
+     "type": "integer",
+     "description": "HTTP requests sent to Garmin, retries included."
+    },
+    "error": {
+     "type": [
+      "string",
+      "null"
+     ],
+     "description": "Set when the run stopped on an authentication error."
+    },
+    "remote_sync_failures": {
+     "type": "integer",
+     "description": "Targets that could not be read."
+    }
+   }
+  },
+  "days": {
+   "type": "object",
+   "description": "Keyed by calendar date, YYYY-MM-DD, sorted ascending.",
+   "propertyNames": {
+    "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+   },
+   "additionalProperties": {
+    "$ref": "#/$defs/day"
+   }
+  },
+  "remote_sync": {
+   "type": "object",
+   "description": "Result of reading each upload target at the start of the last run.",
+   "additionalProperties": {
+    "type": "object",
+    "required": [
+     "checked_at"
+    ],
+    "properties": {
+     "checked_at": {
+      "type": "string",
+      "format": "date-time"
+     },
+     "remote_manifest": {
+      "type": "boolean",
+      "description": "Whether the target had a manifest.json."
+     },
+     "remote_archives": {
+      "type": "integer",
+      "description": "Archives found when listing the target."
+     },
+     "adopted": {
+      "type": "integer",
+      "description": "Days taken over from the target's manifest."
+     },
+     "confirmed": {
+      "type": "integer",
+      "description": "Upload records added because the target's manifest confirmed them."
+     },
+     "dropped": {
+      "type": "integer",
+      "description": "Upload records removed because the file was missing on the target."
+     },
+     "error": {
+      "type": "string",
+      "description": "Set when the target could not be read."
+     }
+    }
+   }
+  }
+ },
+ "$defs": {
+  "stored": {
+   "type": "object",
+   "required": [
+    "http",
+    "bytes"
+   ],
+   "properties": {
+    "http": {
+     "type": "integer",
+     "description": "HTTP status Garmin returned."
+    },
+    "bytes": {
+     "type": "integer"
+    },
+    "file": {
+     "type": "string",
+     "description": "Path inside the day folder. Absent when nothing was stored."
+    }
+   }
+  },
+  "day": {
+   "type": "object",
+   "required": [
+    "status",
+    "attempts"
+   ],
+   "properties": {
+    "status": {
+     "enum": [
+      "provisional",
+      "final",
+      "failed"
+     ]
+    },
+    "attempts": {
+     "type": "integer",
+     "description": "Number of crawl attempts for this day."
+    },
+    "fetched_at": {
+     "type": "string",
+     "format": "date-time"
+    },
+    "path": {
+     "type": "string",
+     "description": "Day folder, relative to the data directory."
+    },
+    "files": {
+     "type": "integer"
+    },
+    "bytes": {
+     "type": "integer",
+     "description": "Uncompressed size of the day folder."
+    },
+    "endpoints": {
+     "type": "object",
+     "additionalProperties": {
+      "$ref": "#/$defs/stored"
+     }
+    },
+    "activities": {
+     "type": "array",
+     "items": {
+      "type": "object",
+      "required": [
+       "id",
+       "files"
+      ],
+      "properties": {
+       "id": {
+        "type": "integer"
+       },
+       "type": {
+        "type": [
+         "string",
+         "null"
+        ]
+       },
+       "files": {
+        "type": "object",
+        "additionalProperties": {
+         "$ref": "#/$defs/stored"
+        }
+       }
+      }
+     }
+    },
+    "archive": {
+     "type": "object",
+     "required": [
+      "file",
+      "bytes",
+      "sha256",
+      "created_at"
+     ],
+     "properties": {
+      "file": {
+       "type": "string",
+       "description": "Relative to the data directory and to each upload remote."
+      },
+      "bytes": {
+       "type": "integer"
+      },
+      "sha256": {
+       "type": "string"
+      },
+      "created_at": {
+       "type": "string",
+       "format": "date-time"
+      }
+     }
+    },
+    "uploads": {
+     "type": "object",
+     "description": "Keyed by target name: gdrive, s3.",
+     "additionalProperties": {
+      "type": "object",
+      "required": [
+       "remote",
+       "sha256",
+       "uploaded_at"
+      ],
+      "properties": {
+       "remote": {
+        "type": "string"
+       },
+       "sha256": {
+        "type": "string",
+        "description": "SHA-256 of the archive that was uploaded."
+       },
+       "uploaded_at": {
+        "type": "string",
+        "format": "date-time"
+       },
+       "storage_class": {
+        "type": "string"
+       }
+      }
+     }
+    },
+    "error": {
+     "type": "string",
+     "description": "Why the last crawl failed."
+    },
+    "failed_at": {
+     "type": "string",
+     "format": "date-time"
+    },
+    "adopted_from": {
+     "type": "string",
+     "description": "Target whose manifest this day was taken from; the day has no local folder until restore."
+    }
+   }
+  }
+ }
+}
