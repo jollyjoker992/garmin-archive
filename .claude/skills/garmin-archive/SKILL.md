@@ -42,7 +42,10 @@ python3 garmin_archive.py run              # crawls, archives, uploads
   `data/manifest.json` and consult the troubleshooting table.
 - Never run two copies, never lower `GARMIN_MIN_INTERVAL`, never edit the
   manifest by hand.
-- Ask before `--refetch` on a day that is already uploaded.
+- Ask before `--refetch` on a day that is already uploaded. For days older
+  than 90 days it is refused (exit 2); do not add `--allow-old-refetch`
+  yourself: Garmin no longer serves their intraday detail. To redo FHIR output,
+  run `python3 garmin_fhir.py map --force` and `load`, which only read the archive.
 
 ## Answer a question from the data
 

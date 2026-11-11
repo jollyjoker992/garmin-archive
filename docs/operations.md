@@ -228,7 +228,8 @@ request first (see "Restore" above).
 | `rclone binary 'rclone' not found` | Install rclone or set `GARMIN_RCLONE_BIN` to its full path. |
 | `Uploaded 200 of 224 archive(s) to gdrive; the rest is retried next run (...)` | The batched upload did not complete; the rclone error is in brackets. Test with `rclone lsf <remote>`. Only archives found on the target are recorded, so nothing is marked uploaded by mistake. |
 | `Copy of ... from another target to ... failed` | A local archive was missing and copying it from the other target failed; it is retried next run. |
-| HR samples, HRV readings or hourly SpO2 missing for days older than ~4 months | Garmin keeps intraday detail only for about four months (`docs/data-format.md`). Nothing to recover through the API; do not `--refetch` those days, it would overwrite archived detail. |
+| HR samples, HRV readings or hourly SpO2 missing for days older than ~4 months | Garmin keeps intraday detail only for about four months (`docs/data-format.md`). Nothing to recover through the API. `--refetch` of those days is refused (it would overwrite archived detail); `--allow-old-refetch` overrides. |
+| `refusing to re-crawl ...: older than 90 days and already archived` | The guard above. Usually the right answer is not to re-crawl; to remap or reload, use `garmin_fhir.py map --force` / `load --force`, which only read the local archive. |
 | Data for a final day looks incomplete (watch synced very late) | `python3 garmin_archive.py run --refetch YYYY-MM-DD`. For a habit of late syncs, raise `GARMIN_SETTLE_DAYS`. |
 | `is final but its folder ... is gone` | The day folder was deleted before it was archived. Use `--refetch` for that day. |
 | `manifest.json` lost | Nothing to do: the next run reads the manifest from the targets and adopts what they hold. Without targets, a new run crawls the whole range again. |

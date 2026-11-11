@@ -116,7 +116,9 @@ crawl on the host while the container's scheduler runs a job.
 - `--refetch` on an uploaded day rewrites its object on S3 Glacier, which can
   incur an early-deletion charge. Ask the owner first. Never `--refetch` a day
   older than about four months: Garmin no longer serves its intraday detail,
-  so the archived copy would be replaced by a thinner one.
+  so the archived copy would be replaced by a thinner one. The crawler refuses
+  it (exit 2); never add `--allow-old-refetch` on your own. To fix FHIR output,
+  re-map from the archive instead (`garmin_fhir.py map --force`).
 - Do not switch to the unofficial `garminconnect` / `garth` libraries. They log
   in with the account password and get accounts rate-limited.
 - Uploading sends health data to external services. Only use the remotes the

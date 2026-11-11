@@ -160,6 +160,7 @@ class Config:
     timeout: float
     max_days_per_run: int
     include_today: bool
+    refetch_max_age_days: int
     skip_endpoints: set[str]
     gdrive_remote: str
     s3_remote: str
@@ -194,6 +195,7 @@ class Config:
             timeout=_env_num("GARMIN_TIMEOUT", 30.0),
             max_days_per_run=_env_num("GARMIN_MAX_DAYS_PER_RUN", 0, int),
             include_today=_env("GARMIN_INCLUDE_TODAY", "false").lower() in ("1", "true", "yes"),
+            refetch_max_age_days=_env_num("GARMIN_REFETCH_MAX_AGE_DAYS", 90, int),
             skip_endpoints=skip,
             gdrive_remote=_env("GARMIN_GDRIVE_REMOTE").rstrip("/"),
             s3_remote=_env("GARMIN_S3_REMOTE").rstrip("/"),
@@ -1023,6 +1025,26 @@ def cmd_status(cfg: Config, args) -> int:
     return EXIT_OK
 
 
+def check_refetch_age(cfg: Config, manifest: dict, refetch: set[str], allowed: bool) -> None:
+    """Refuse to re-crawl old days that are already archived.
+
+    Garmin serves intraday detail (heart-rate samples, HRV readings, hourly SpO2)
+    for only about four months. Re-crawling an older day would replace its
+    archived folder with Garmin's thinner answer and re-upload that copy over
+    the good one on every target."""
+    cutoff = cfg.today - dt.timedelta(days=cfg.refetch_max_age_days)
+    risky = sorted(d for d in refetch
+                   if dt.date.fromisoformat(d) < cutoff and (manifest["days"].get(d) or {}).get("archive"))
+    if risky and not allowed:
+        raise ConfigError(
+            f"refusing to re-crawl {', '.join(risky)}: older than {cfg.refetch_max_age_days} days and already "
+            "archived. Garmin no longer serves intraday detail for such days, so the archived copy (and the "
+            "uploaded ones) would be replaced by less data. Use --allow-old-refetch if that is really intended.")
+    if risky:
+        log.warning("Re-crawling old archived day(s) %s on request (--allow-old-refetch); intraday detail "
+                    "Garmin no longer serves will be lost, here and on the upload targets", ", ".join(risky))
+
+
 def resolve_range(cfg: Config, args) -> tuple[dt.date, dt.date]:
     start = parse_date(args.start, "--from") if args.start else cfg.start_date
     last = cfg.today if cfg.include_today else cfg.today - dt.timedelta(days=1)
@@ -1042,6 +1064,7 @@ def cmd_run(cfg: Config, args) -> int:
     if any(d > latest.isoformat() for d in refetch):
         raise ConfigError(f"--refetch dates must be on or before {latest}")
     manifest = load_manifest(cfg)
+    check_refetch_age(cfg, manifest, refetch, args.allow_old_refetch)
     sync_failures = 0
     if not args.dry_run and cfg.targets():
         sync_failures = sync_remote_state(cfg, manifest)
@@ -1208,6 +1231,8 @@ def build_parser() -> argparse.ArgumentParser:
     add_range(run)
     run.add_argument("--refetch", action="append", default=[], metavar="YYYY-MM-DD",
                      help="crawl this day again even if it is final (repeatable)")
+    run.add_argument("--allow-old-refetch", action="store_true",
+                     help="allow --refetch of archived days older than GARMIN_REFETCH_MAX_AGE_DAYS (loses intraday detail)")
     run.add_argument("--max-days", type=int, help="crawl at most this many days (overrides GARMIN_MAX_DAYS_PER_RUN)")
     run.add_argument("--no-upload", action="store_true", help="crawl and archive only")
     run.add_argument("--dry-run", action="store_true", help="print the days that would be crawled and exit")

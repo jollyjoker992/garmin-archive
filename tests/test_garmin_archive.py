@@ -184,6 +184,31 @@ class RunTests(Base):
         self.assertEqual(entry["status"], "provisional")
         self.assertNotIn("archive", entry)
 
+    def test_refetch_of_old_archived_day_is_refused(self):
+        os.environ["GARMIN_REFETCH_MAX_AGE_DAYS"] = "30"
+        old = (dt.date.today() - dt.timedelta(days=40)).isoformat()
+        self.assertEqual(self.run_cli("run", "--from", old, "--to", old), 0)
+        before = self.manifest()["days"][old]
+        sleep_file = Path(self.tmp.name) / "days" / old[:4] / old / "sleep.json"
+        sleep_file.write_text('{"marker": "archived detail"}')     # stands in for detail Garmin no longer serves
+        StubGarmin.hits = []
+
+        self.assertEqual(self.run_cli("run", "--from", old, "--to", old, "--refetch", old), 2)
+        self.assertEqual(StubGarmin.hits, [])                        # Garmin not called
+        self.assertEqual(sleep_file.read_text(), '{"marker": "archived detail"}')
+        self.assertEqual(self.manifest()["days"][old]["archive"], before["archive"])
+
+        self.assertEqual(self.run_cli("run", "--from", old, "--to", old, "--refetch", old, "--allow-old-refetch"), 0)
+        self.assertNotIn("marker", sleep_file.read_text())
+
+    def test_refetch_allowed_for_recent_or_never_archived_days(self):
+        os.environ["GARMIN_REFETCH_MAX_AGE_DAYS"] = "30"
+        recent = (dt.date.today() - dt.timedelta(days=5)).isoformat()
+        never = (dt.date.today() - dt.timedelta(days=200)).isoformat()
+        self.run_cli("run", "--from", recent, "--to", recent)
+        self.assertEqual(self.run_cli("run", "--from", recent, "--to", recent, "--refetch", recent), 0)
+        self.assertEqual(self.run_cli("run", "--from", never, "--to", never, "--refetch", never), 0)
+
     def test_today_is_excluded_by_default(self):
         today = dt.date.today().isoformat()
         self.assertEqual(self.run_cli("run", "--to", today), 2)       # refused without the setting
@@ -213,7 +238,7 @@ class RunTests(Base):
         self.run_cli("run", "--from", "2026-01-01", "--to", "2026-01-01")
         first = self.manifest()["days"]["2026-01-01"]
         self.assertEqual(self.run_cli("run", "--from", "2026-01-01", "--to", "2026-01-01",
-                                      "--refetch", "2026-01-01"), 0)
+                                      "--refetch", "2026-01-01", "--allow-old-refetch"), 0)
         second = self.manifest()["days"]["2026-01-01"]
         self.assertEqual(second["attempts"], 2)
         self.assertGreaterEqual(second["fetched_at"], first["fetched_at"])

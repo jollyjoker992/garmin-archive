@@ -105,8 +105,9 @@ For older days Garmin returns the intraday fields as `null`. The archive keeps
 what was available when the day was crawled, so crawling daily preserves the
 detail. Re-crawling an old day (`--refetch`) replaces its folder with what
 Garmin returns now, which can be less, and re-uploads that copy over the
-previous one on every target. Do not `--refetch` days older than about four
-months.
+previous one on every target. The crawler therefore refuses `--refetch` of an
+archived day older than `GARMIN_REFETCH_MAX_AGE_DAYS` (default 90) unless
+`--allow-old-refetch` is given.
 
 ## manifest.json
 

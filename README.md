@@ -91,7 +91,8 @@ python3 garmin_archive.py [--env-file FILE] restore [--from D] [--to D]
 | Option | Meaning |
 |---|---|
 | `--from`, `--to` | Limit the range. Defaults: `GARMIN_START_DATE` and yesterday. |
-| `--refetch D` | Crawl day `D` again even if it is final. Its archive is rebuilt and uploaded again. Repeatable. |
+| `--refetch D` | Crawl day `D` again even if it is final. Its archive is rebuilt and uploaded again. Repeatable. Refused (exit 2) for archived days older than `GARMIN_REFETCH_MAX_AGE_DAYS`, because Garmin no longer serves their intraday detail. |
+| `--allow-old-refetch` | Allow `--refetch` of such old archived days anyway; their heart-rate samples, HRV readings and hourly SpO2 are then lost, locally and on the targets. |
 | `--max-days N` | Crawl at most `N` days in this run. |
 | `--no-upload` | Crawl and archive only. |
 | `--dry-run` | Print the days that would be crawled. Makes no request. |
@@ -106,7 +107,7 @@ python3 garmin_archive.py [--env-file FILE] restore [--from D] [--to D]
 |---|---|---|
 | 0 | Everything planned was crawled, archived and uploaded. | Nothing. |
 | 1 | Some days or uploads failed. They are recorded and retried next run. | Check the log if it repeats. |
-| 2 | Configuration error, or Garmin rejected the API key. | Fix the setting, or create a new key. |
+| 2 | Configuration error, Garmin rejected the API key, or a refused `--refetch` of an old archived day. | Fix the setting, create a new key, or reconsider the refetch. |
 | 3 | Another run holds the lock. | Nothing. |
 
 ## Configuration
@@ -123,6 +124,7 @@ All settings are environment variables. A `.env` file next to the script (or
 | `GARMIN_S3_REMOTE` | unset | rclone destination, for example `s3garmin:my-bucket/garmin`. |
 | `GARMIN_S3_STORAGE_CLASS` | `GLACIER` | Storage class for archives on S3. |
 | `GARMIN_SETTLE_DAYS` | `2` | Age in days at which a crawled day is final. |
+| `GARMIN_REFETCH_MAX_AGE_DAYS` | `90` | `--refetch` of an archived day older than this is refused without `--allow-old-refetch` (Garmin keeps intraday detail about four months). |
 | `GARMIN_INCLUDE_TODAY` | `false` | Also fetch today, as provisional. Gives last night's sleep, HRV and Body Battery the same morning (Garmin dates sleep by the morning it ends). Today is never final, archived or uploaded. |
 | `GARMIN_MIN_INTERVAL` | `1.0` | Minimum seconds between requests (up to 25% jitter is added). |
 | `GARMIN_MAX_ATTEMPTS` | `5` | Attempts per request. |
