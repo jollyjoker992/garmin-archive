@@ -57,7 +57,7 @@ Before step 2 the server shows `Pending approval`, and a non-interactive run
 (`claude -p`) reports `headersHelper not run — this workspace has no persisted
 trust`. Both are expected until the folder is trusted once.
 
-## Other agents (Codex, Cursor, Copilot, Gemini)
+## Other agents (Antigravity, Codex, Cursor, Copilot)
 
 Agents that can run shell commands do not need MCP at all: the skills use
 `python3 tools/medplum_agent.py graphql|codes|fit`, which gets and renews the
@@ -76,7 +76,8 @@ export GARMIN_MEDPLUM_TOKEN="$(python3 tools/medplum_agent.py token)"
 | Codex | `~/.codex/config.toml`, or `.codex/config.toml` in a trusted project: `[mcp_servers.garmin-medplum]` with `url = "http://localhost:8103/mcp/stream"` and `bearer_token_env_var = "GARMIN_MEDPLUM_TOKEN"`. Codex also documents `http_headers_helper` (a command that prints JSON headers, like Claude Code's `headersHelper`); `python3 tools/medplum_agent.py headers` prints that format, but this has not been tested here. |
 | Cursor | `.cursor/mcp.json`: `{"mcpServers": {"garmin-medplum": {"url": "http://localhost:8103/mcp/stream", "headers": {"Authorization": "Bearer ${env:GARMIN_MEDPLUM_TOKEN}"}}}}` |
 | GitHub Copilot CLI | Reads the repository's `.mcp.json` after you trust the folder, but not `headersHelper`; put the server in `~/.copilot/mcp-config.json` with `"type": "http"`, the URL and `"headers": {"Authorization": "Bearer <token>"}`. |
-| Gemini CLI | `gemini mcp add --scope user --transport http --header "Authorization: Bearer $GARMIN_MEDPLUM_TOKEN" garmin-medplum http://localhost:8103/mcp/stream` (`httpUrl` + `headers` in `~/.gemini/settings.json`). This stores the token itself, so repeat it when the token expires, and use `--scope user`: the default project scope would write the token into the repository's `.gemini/settings.json`. |
+| Antigravity CLI | `~/.gemini/config/mcp_config.json`: `{"mcpServers": {"garmin-medplum": {"serverUrl": "http://localhost:8103/mcp/stream", "headers": {"Authorization": "Bearer <token>"}}}}`. The token is written into the file, so replace it when it expires. Use this user-level file, not the workspace `.agents/mcp_config.json`, which would put the token in the repository. |
+| Gemini CLI | Paid plans only since June 2026: `gemini mcp add --scope user --transport http --header "Authorization: Bearer $GARMIN_MEDPLUM_TOKEN" garmin-medplum http://localhost:8103/mcp/stream`. |
 
 These formats come from each vendor's documentation (checked November 2026)
 and change often; check them there if something does not connect. Do not
@@ -145,24 +146,31 @@ The skills are in `.agents/skills/`, the folder most agents read
 | Agent | Finds them through |
 |---|---|
 | Claude Code | `.claude/skills`, a link to `.agents/skills` |
-| Codex, Cursor, Gemini CLI, Copilot CLI and coding agent | `.agents/skills` |
+| Antigravity CLI, Codex, Cursor, Gemini CLI, Copilot CLI and coding agent | `.agents/skills` |
 | GitHub Copilot in VS Code | `.github/skills` only: add `ln -s ../.agents/skills .github/skills` locally if you use it |
 
 `AGENTS.md` holds the rules every agent must follow (Medplum, not `data/`;
 never re-crawl old days; no secrets). Claude Code reads it through
-`CLAUDE.md`; Codex, Cursor and Copilot read it directly; Gemini CLI through
-the committed `.gemini/settings.json` (`context.fileName`).
+`CLAUDE.md`; Antigravity, Codex, Cursor and Copilot read it directly; Gemini
+CLI through the committed `.gemini/settings.json` (`context.fileName`).
 
-### Gemini CLI
+### Antigravity CLI (and Gemini CLI)
 
-1. Start Medplum, then run `gemini` in the repository folder. If folder trust
-   is on, trust the folder: Gemini ignores a project's `.gemini/settings.json`
-   in an untrusted folder, and would then not read `AGENTS.md`.
-2. `/memory show` should include `AGENTS.md`; `/skills list` should show
-   the three `garmin-*` skills.
-3. Ask, for example, "How did I sleep last week?". Gemini asks before it
-   activates a skill and before each shell command; allow
-   `python3 tools/medplum_agent.py ...`. MCP is not needed.
+Since 18 June 2026 Gemini CLI no longer serves free, Google AI Pro and Ultra
+accounts ("This client is no longer supported for Gemini Code Assist for
+individuals"); Google's replacement is Antigravity CLI (`agy`, see
+https://antigravity.google/docs/cli/gcli-migration). It reads `AGENTS.md` and
+`.agents/skills/` as they are, so nothing in this repository needs changing.
+
+1. Start Medplum, then run `agy` in the repository folder.
+2. Ask, for example, "How did I sleep last week?". Shell commands outside its
+   sandbox ask for approval; allow `python3 tools/medplum_agent.py ...` and
+   `python3 tools/garmin_report.py ...`. MCP is not needed.
+3. Check that it answers from Medplum and does not open files under
+   `data/days/`.
+
+Gemini CLI on a paid plan works the same way; trust the folder so it loads
+`.gemini/settings.json`, and check with `/memory show` and `/skills list`.
 
 On Windows, Git checks out the `.claude/skills` link as a plain file unless
 symlinks are enabled (`git config core.symlinks true` and Developer Mode).
