@@ -9,7 +9,7 @@ Binary, CodeSystem and ValueSet; every write is refused (HTTP 403, or
 
 | Interface | Address | For |
 |---|---|---|
-| MCP | `http://localhost:8103/mcp/stream` (streamable HTTP), `/mcp/sse` | Agents with MCP support (Claude Code, other MCP clients). Tools: `fhir-request`, `search`, `fetch`. |
+| MCP | `http://localhost:8103/mcp/stream` (streamable HTTP), `/mcp/sse` | Agents with MCP support (Claude Code, Codex, Cursor, Copilot, ...). Tools: `fhir-request`, `search`, `fetch`. |
 | GraphQL | `POST http://localhost:8103/fhir/R4/$graphql` | Analysis: ask for exactly the fields needed. |
 | REST | `http://localhost:8103/fhir/R4/` | Anything else. |
 
@@ -57,17 +57,33 @@ Before step 2 the server shows `Pending approval`, and a non-interactive run
 (`claude -p`) reports `headersHelper not run — this workspace has no persisted
 trust`. Both are expected until the folder is trusted once.
 
-## Other MCP clients
+## Other agents (Codex, Cursor, Copilot, Gemini)
 
-Any client that can send a static header works for an hour at a time:
+Agents that can run shell commands do not need MCP at all: the skills use
+`python3 tools/medplum_agent.py graphql|codes|fit`, which gets and renews the
+read-only token by itself. MCP is optional.
+
+To connect MCP anyway, give the agent the read-only token in an environment
+variable. A token lasts one hour, so set it right before starting the agent and
+restart the agent when it expires:
 
 ```sh
-python3 tools/medplum_agent.py token     # paste as "Authorization: Bearer <token>"
+export GARMIN_MEDPLUM_TOKEN="$(python3 tools/medplum_agent.py token)"
 ```
 
-Prefer a client that can run a command for headers, like Claude Code's
-`headersHelper`. Do not sign in to MCP with the browser OAuth flow for agent
-use: that logs in as the admin user, who can change data.
+| Agent | Config (not committed; add it yourself) |
+|---|---|
+| Codex | `~/.codex/config.toml`, or `.codex/config.toml` in a trusted project: `[mcp_servers.garmin-medplum]` with `url = "http://localhost:8103/mcp/stream"` and `bearer_token_env_var = "GARMIN_MEDPLUM_TOKEN"`. Codex also documents `http_headers_helper` (a command that prints JSON headers, like Claude Code's `headersHelper`); `python3 tools/medplum_agent.py headers` prints that format, but this has not been tested here. |
+| Cursor | `.cursor/mcp.json`: `{"mcpServers": {"garmin-medplum": {"url": "http://localhost:8103/mcp/stream", "headers": {"Authorization": "Bearer ${env:GARMIN_MEDPLUM_TOKEN}"}}}}` |
+| GitHub Copilot CLI | Reads the repository's `.mcp.json` after you trust the folder, but not `headersHelper`; put the server in `~/.copilot/mcp-config.json` with `"type": "http"`, the URL and `"headers": {"Authorization": "Bearer <token>"}`. |
+| Gemini CLI | `.gemini/settings.json`: `mcpServers.garmin-medplum.httpUrl` and `headers` (a literal token; environment variables in headers are not documented). |
+
+These formats come from each vendor's documentation (checked November 2026)
+and change often; check them there if something does not connect. Do not
+commit a file that contains a token.
+
+Do not sign in to MCP with the browser OAuth flow for agent use: that logs in
+as the admin user, who can change data.
 
 ## GraphQL and scripts
 
@@ -116,11 +132,26 @@ scripts. The script refuses to render characters the font cannot show.
 
 ## Skills
 
-- `.claude/skills/garmin-health-analysis/SKILL.md`: analysing the data (where each
+The skills are in `.agents/skills/`, the folder most agents read
+(`SKILL.md` format: a `name` and `description` header, then instructions):
+
+- `.agents/skills/garmin-health-analysis/SKILL.md`: analysing the data (where each
   metric is, rules that prevent wrong answers, tested GraphQL recipes).
-- `.claude/skills/garmin-reports/SKILL.md`: PDF reports for an activity or a
-  week/month of wellness.
-- `.claude/skills/garmin-archive/SKILL.md`: operating the backup (status,
+- `.agents/skills/garmin-reports/SKILL.md`: PDF reports for an activity, a day,
+  or a week/month of wellness.
+- `.agents/skills/garmin-archive/SKILL.md`: operating the backup (status,
   filling gaps, restore).
 
-Claude Code picks both up automatically in this repository.
+| Agent | Finds them through |
+|---|---|
+| Claude Code | `.claude/skills`, a link to `.agents/skills` |
+| Codex, Cursor, Gemini CLI, Copilot CLI and coding agent | `.agents/skills` |
+| GitHub Copilot in VS Code | `.github/skills` only: add `ln -s ../.agents/skills .github/skills` locally if you use it |
+
+`AGENTS.md` holds the rules every agent must follow (Medplum, not `data/`;
+never re-crawl old days; no secrets). Claude Code reads it through
+`CLAUDE.md`; Codex, Cursor and Copilot read it directly; Gemini CLI only when
+`context.fileName` in `.gemini/settings.json` lists `"AGENTS.md"`.
+
+On Windows, Git checks out the `.claude/skills` link as a plain file unless
+symlinks are enabled (`git config core.symlinks true` and Developer Mode).

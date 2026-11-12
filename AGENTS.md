@@ -47,7 +47,7 @@ configuration or rejected API key (needs a person), `3` another run is active.
 
 Questions about health or workout data (sleep, HRV, heart rate, stress, steps,
 workouts, anything inside a workout) are answered from the local Medplum with
-the read-only agent client, following `.claude/skills/garmin-health-analysis/SKILL.md`:
+the read-only agent client, following `.agents/skills/garmin-health-analysis/SKILL.md`:
 `python3 tools/medplum_agent.py graphql|codes|fit ...`. In particular:
 
 - Do not open, parse or unzip files under `data/days/` (`*.json`,
@@ -106,12 +106,12 @@ Look up a custom code with
 `GET CodeSystem/$lookup?system=<garmin-metrics url>&code=<code>`.
 
 For a PDF report (one activity, or a week/month of wellness), follow
-`.claude/skills/garmin-reports/SKILL.md` (`tools/garmin_report.py`: facts,
+`.agents/skills/garmin-reports/SKILL.md` (`tools/garmin_report.py`: facts,
 then your narrative, then the PDF in `data/reports/`).
 
-To analyse the data, follow `.claude/skills/garmin-health-analysis/SKILL.md`
+To analyse the data, follow `.agents/skills/garmin-health-analysis/SKILL.md`
 and use `python3 tools/medplum_agent.py` (read-only: `graphql`, `codes`,
-`token`, and `fit` for second-by-second workout data from the FIT files). MCP setup for Claude Code (`.mcp.json`) is in `docs/agents.md`.
+`token`, and `fit` for second-by-second workout data from the FIT files). MCP setup (Claude Code `.mcp.json`, and other agents) is in `docs/agents.md`.
 
 Date searches must carry the account's UTC offset, e.g.
 `date=ge2026-11-07T00:00:00%2B07:00` for UTC+7 (read it from any

@@ -4,6 +4,7 @@
 data/
 .git/
 .claude/
+.agents/
 **/node_modules/
 **/__pycache__/
 *.pyc

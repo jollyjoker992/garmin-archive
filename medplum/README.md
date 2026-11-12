@@ -113,5 +113,5 @@ https://github.com/medplum/medplum/releases
   ours and are left alone.
 - Signing in to MCP through OAuth in a browser logs in as a user, with that
   user's access. For read-only agent access, use the agent client's token
-  instead; `docs/agents.md` shows how (Claude Code `.mcp.json` with
-  `headersHelper`).
+  instead; `docs/agents.md` shows how for Claude Code
+  (`.mcp.json` with `headersHelper`) and other agents.

@@ -23,9 +23,10 @@ client or the admin login to read data.
 
 - **GraphQL (preferred for analysis):** `python3 tools/medplum_agent.py graphql '<query>' [--vars '<json>']`.
   Returns compact JSON with only the fields you ask for; pipe it into `python3 -c` for the maths.
-- **MCP:** the `garmin-medplum` server in `.mcp.json` exposes `fhir-request`
-  (FHIR REST: `GET Observation?...`). Same data, same read-only client. Use it
-  when GraphQL through Bash is not available.
+- **MCP:** if your agent has the `garmin-medplum` MCP server connected
+  (`.mcp.json` for Claude Code; other agents: `docs/agents.md`), its
+  `fhir-request` tool runs FHIR REST (`GET Observation?...`). Same data, same
+  read-only client. Use it when you cannot run shell commands.
 
 ## 3. Rules that prevent wrong answers
 
