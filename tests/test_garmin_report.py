@@ -104,6 +104,26 @@ class ReportTests(unittest.TestCase):
         self.assertNotIn("summary", ja.fallback)
         self.assertEqual(set(gr.LABELS_VI) - set(gr.LABELS_EN), set())   # no stray Vietnamese keys
 
+    def test_sampled_points_skip_missing_readings(self):
+        obs = {"effectivePeriod": {"start": "2026-11-11T00:00:00+07:00"},
+               "valueSampledData": {"period": 120000, "data": "60 E 62 L 64"}}
+        pts = gr.sampled_points(obs)
+        self.assertEqual([v for _, v in pts], [60.0, 62.0, 64.0])
+        self.assertEqual([t.strftime("%H:%M") for t, _ in pts], ["00:00", "00:04", "00:08"])
+        self.assertEqual(gr.sampled_points(None), [])
+
+    def test_compare_with_baseline(self):
+        c = gr.compare(62, [50, 55, 60, None, 70])
+        self.assertEqual((c["avg"], c["diff"], c["days_lower"], c["days"], c["min"], c["max"]), (58.8, 3.2, 3, 4, 50, 70))
+        self.assertEqual(gr.compare(None, [1, 2])["diff"], None)
+        self.assertEqual(gr.parse_offset("+07:00").utcoffset(None), dt.timedelta(hours=7))
+        self.assertEqual(gr.parse_offset("-03:30").utcoffset(None), dt.timedelta(hours=-3, minutes=-30))
+
+    def test_day_labels_are_complete_in_vietnamese(self):
+        missing = [k for k in gr.LABELS_EN if k not in gr.LABELS_VI]
+        self.assertEqual(missing, [])
+        self.assertEqual(gr.Labels("vi").date(dt.date(2026, 11, 11), "long_day"), "Thứ Tư, 11/11/2026")
+
     def test_narrative_is_required_and_checked(self):
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "n.json"

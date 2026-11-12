@@ -1,6 +1,6 @@
 ---
 name: garmin-reports
-description: Produce a PDF report from the owner's Garmin data in the local Medplum - an activity report for one workout (summary, second-by-second charts of heart rate, pace, power, cadence and running dynamics, splits, zones, evaluation and recommendations) or a wellness report for a week or month (sleep, HRV, resting heart rate, stress, Body Battery, steps, training, evaluation and recommendations). Use when the user asks for a report, a PDF, a weekly/monthly summary, or a write-up of a run, ride or other workout.
+description: Produce a PDF report from the owner's Garmin data in the local Medplum - a daily report for one day (heart rate through the day, Body Battery, overnight HRV, sleep stages, stress, compared with the previous 28 days), an activity report for one workout (summary, second-by-second charts of heart rate, pace, power, cadence and running dynamics, splits, zones, evaluation and recommendations) or a wellness report for a week or month (sleep, HRV, resting heart rate, stress, Body Battery, steps, training, evaluation and recommendations). Use when the user asks for a report, a PDF, a weekly/monthly summary, or a write-up of a run, ride or other workout.
 ---
 
 # Garmin reports (PDF)
@@ -34,6 +34,21 @@ Data comes from the local Medplum with the read-only client (see the
 ```sh
 python3 tools/garmin_report.py activity <activity> --facts /tmp/garmin-report/facts.json
 ```
+
+**One day:** `--date 2026-11-11`. A one-day report is different from a week:
+it shows the day itself (heart rate every 2 minutes with sleep and workouts
+shaded, Body Battery through the day with what charged or drained it,
+overnight HRV every 5 minutes, SpO2 by hour, sleep stages against sleep need,
+time at each stress level) and compares the day with the **previous 28 days**
+(average, range, how many of the 28 days were lower). Use it for "how was
+yesterday / today / 11 November". Today is allowed: last night's sleep, HRV and
+resting HR are final, the rest is partial and left out of the comparison.
+
+```sh
+python3 tools/garmin_report.py day --date 2026-11-11 --facts /tmp/garmin-report/facts.json
+```
+
+(`wellness --from D --to D` with one day is turned into this report.)
 
 **Wellness:** a week (`--week 2026-W45`, ISO week, Monday to Sunday), a month
 (`--month 2026-10`) or a range (`--from 2026-10-01 --to 2026-10-14`). Without a
@@ -97,6 +112,16 @@ What to look at:
 | `summary.steps`, `intensity_minutes_total`, `workouts` | movement and training volume |
 | `change_vs_previous_avg`, `best_and_worst` | direction of travel and outliers |
 
+| Day facts | What it tells you |
+|---|---|
+| `sleep` | window, minutes vs `need_min`, stages and percentages, Garmin's sub-ratings, vitals during sleep |
+| `hrv` | night average vs `balanced_range_ms`, status, spread of the 5-minute readings |
+| `heart_rate` | resting vs its 7-day average, day min/max, awake average, `hourly_avg` |
+| `stress` | average, peak, Garmin's label, minutes at each level |
+| `body_battery` | high/low, charged/drained, `events` that charged or drained it, points through the day |
+| `activity`, `workouts` | steps vs goal, calories, intensity minutes, workouts of the day |
+| `compared_with_previous_28_days` | for each measure: this day, average, range, difference, `days_lower` of 28 |
+
 ## Language
 
 Write the report in the language the person asked for, or the one they wrote
@@ -127,10 +152,11 @@ in. Set `"language"` in `narrative.json` (`"en"`, `"vi"`, `"ja"`, ...).
 ```sh
 python3 tools/garmin_report.py activity <activity> --narrative /tmp/garmin-report/narrative.json
 python3 tools/garmin_report.py wellness --week 2026-W45 --narrative /tmp/garmin-report/narrative.json
+python3 tools/garmin_report.py day --date 2026-11-11 --narrative /tmp/garmin-report/narrative.json
 ```
 
-The PDF goes to `data/reports/activity-<id>.pdf` or
-`data/reports/wellness-<period>.pdf` (mode 600, ignored by git); `--out` sets
+The PDF goes to `data/reports/activity-<id>.pdf`,
+`data/reports/wellness-<period>.pdf` or `data/reports/day-<date>.pdf` (mode 600, ignored by git); `--out` sets
 another path. Tell the person the path and the headline. To check the layout,
 `pdftoppm -r 60 -png <pdf> /tmp/garmin-report/page` and look at the pages.
 

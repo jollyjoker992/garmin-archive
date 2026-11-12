@@ -7,6 +7,7 @@ an agent from computed facts, never invented by this script:
 
   1. facts   python3 tools/garmin_report.py activity <activity> --facts facts.json
              python3 tools/garmin_report.py wellness --week 2026-W45 --facts facts.json
+             python3 tools/garmin_report.py day --date 2026-11-11 --facts facts.json
   2. render  python3 tools/garmin_report.py activity <activity> --narrative narrative.json [--out report.pdf]
              python3 tools/garmin_report.py wellness --week 2026-W45 --narrative narrative.json [--out report.pdf]
 
@@ -454,6 +455,162 @@ def wellness_facts(start: dt.date, end: dt.date, label: str) -> tuple[dict, dict
 
 
 # --------------------------------------------------------------------------
+# Day facts (one calendar day: intraday detail against a 28-day baseline)
+# --------------------------------------------------------------------------
+
+BASELINE_DAYS = 28
+DAY_KEYS = DAILY + ("hr-min", "hr-max", "floors-up", "distance")
+SAMPLED_KEYS = ("hr-samples", "hrv-readings", "spo2-hourly")
+SAMPLED_FIELDS = "identifier { value } effectivePeriod { start end } valueSampledData { period data }"
+
+
+def parse_offset(offset: str) -> dt.timezone:
+    sign = -1 if offset.startswith("-") else 1
+    hours, minutes = (int(x) for x in offset[1:].split(":"))
+    return dt.timezone(sign * dt.timedelta(hours=hours, minutes=minutes))
+
+
+def sampled_points(obs: dict | None) -> list[tuple[dt.datetime, float]]:
+    """(time, value) pairs of a SampledData Observation; 'E' (no reading) is skipped."""
+    if not obs or not obs.get("valueSampledData"):
+        return []
+    start = dt.datetime.fromisoformat(obs["effectivePeriod"]["start"])
+    period = dt.timedelta(milliseconds=obs["valueSampledData"]["period"])
+    return [(start + i * period, float(v)) for i, v in enumerate((obs["valueSampledData"].get("data") or "").split())
+            if v not in ("E", "L", "U")]
+
+
+def observations_between(code: str, start: str, end: str, fields: str) -> list[dict]:
+    res = ma.graphql('query($c: String, $f: String) { ObservationList(code: $c, _filter: $f, _sort: "date", _count: 1000) { %s } }'
+                     % fields, {"c": code, "f": f"date ge {start} and date lt {end}"})
+    return res["data"]["ObservationList"]
+
+
+def compare(today, values: list) -> dict:
+    values = [v for v in values if v is not None]
+    if today is None or not values:
+        return {"this_day": today, "avg": rnd(mean(values)) if values else None, "min": min(values) if values else None,
+                "max": max(values) if values else None, "diff": None, "days_lower": None, "days": len(values)}
+    avg = mean(values)
+    return {"this_day": today, "avg": rnd(avg), "min": min(values), "max": max(values), "diff": rnd(today - avg),
+            "days_lower": sum(1 for v in values if v < today), "days": len(values)}
+
+
+def day_facts(day: dt.date) -> tuple[dict, dict]:
+    offset = account_offset()
+    tz = parse_offset(offset)
+    d = day.isoformat()
+    iso = lambda x: dt.datetime.combine(x, dt.time(), tz).isoformat()
+    obs = observations_by_key([f"{d}/{k}" for k in DAY_KEYS] + [f"{d}/sleep-score"])
+    series_obs = {}
+    res = ma.graphql('query($i: String) { ObservationList(identifier: $i) { %s } }' % SAMPLED_FIELDS,
+                     {"i": ",".join(f"{ma.OBS_SYSTEM}|{d}/{k}" for k in SAMPLED_KEYS)})
+    for o in res["data"]["ObservationList"]:
+        series_obs[o["identifier"][0]["value"].split("/", 1)[1]] = o
+    g = lambda k: obs.get(f"{d}/{k}")
+    sleep, score, hrv, bb, stress, steps = g("sleep"), g("sleep-score"), g("hrv-night"), g("body-battery"), g("stress"), g("steps")
+    sc, scs, hc, bc, stc, stp = comps(sleep or {}), comps(score or {}), comps(hrv or {}), comps(bb or {}), comps(stress or {}), comps(steps or {})
+    rr = ((hrv or {}).get("referenceRange") or [{}])[0]
+
+    day_start, day_end = dt.datetime.combine(day, dt.time(), tz), dt.datetime.combine(day + dt.timedelta(days=1), dt.time(), tz)
+    hr = sampled_points(series_obs.get("hr-samples"))
+    hrv_readings = sampled_points(series_obs.get("hrv-readings"))
+    spo2 = sampled_points(series_obs.get("spo2-hourly"))
+    bb_points = [(dt.datetime.fromisoformat(o["effectiveDateTime"]), o["valueQuantity"]["value"])
+                 for o in observations_between(f"{GM}|body-battery-level", iso(day), iso(day + dt.timedelta(days=1)),
+                                               "effectiveDateTime valueQuantity { value }")]
+    events = []
+    for o in observations_between(f"{GM}|body-battery-event-impact", iso(day - dt.timedelta(days=1)),
+                                  iso(day + dt.timedelta(days=1)),
+                                  "effectivePeriod { start end } valueQuantity { value } component { valueCodeableConcept { text } }"):
+        end = dt.datetime.fromisoformat(o["effectivePeriod"]["end"])
+        if day_start <= end < day_end:                     # an event belongs to the day it ends on
+            events.append({"start": o["effectivePeriod"]["start"], "end": o["effectivePeriod"]["end"],
+                           "impact": o["valueQuantity"]["value"],
+                           "type": ((o.get("component") or [{}])[0].get("valueCodeableConcept") or {}).get("text")})
+    workouts = ma.list_workouts(iso(day), iso(day + dt.timedelta(days=1)))
+
+    hourly = {}
+    for t, v in hr:
+        hourly.setdefault(t.astimezone(tz).hour, []).append(v)
+    sleep_window = (sleep or {}).get("effectivePeriod")
+    in_sleep = lambda t: bool(sleep_window) and dt.datetime.fromisoformat(sleep_window["start"]) <= t <= dt.datetime.fromisoformat(sleep_window["end"])
+    awake_hr = [v for t, v in hr if not in_sleep(t)]
+
+    base_days = wellness_days(day - dt.timedelta(days=BASELINE_DAYS), day - dt.timedelta(days=1))
+    col = lambda k: [x.get(k) for x in base_days]
+    today = dt.date.today()
+    partial = day == today
+    this = {"sleep_min": value(sleep), "sleep_score": value(score), "hrv_ms": value(hrv), "resting_hr": value(g("resting-hr")),
+            "stress_avg": None if partial else value(stress), "bb_max": value(bb), "bb_min": None if partial else bc.get("body-battery-min"),
+            "steps": None if partial else value(steps), "respiration_avg": None if partial else value(g("respiration-avg")),
+            "spo2_avg": None if partial else value(g("spo2-avg"))}
+    stages = {"deep": sc.get("93831-6"), "light": sc.get("93830-8"), "rem": sc.get("93829-0"), "awake": sc.get("93828-2")}
+    total_stages = sum(v for v in stages.values() if v) or None
+
+    facts = {
+        "kind": "day", "date": d, "utc_offset": offset, "partial_day": partial,
+        "sleep": {
+            "start": (sleep_window or {}).get("start"), "end": (sleep_window or {}).get("end"),
+            "minutes": value(sleep), "need_min": sc.get("sleep-need"), "score": value(score),
+            "score_qualifier": scs.get("sleep-score-qualifier"),
+            "stages_min": stages,
+            "stages_pct": {k: rnd(100 * v / total_stages) if v and total_stages else None for k, v in stages.items()},
+            "sub_scores": {k: scs.get(f"sleep-{k}-qualifier") for k in ("duration", "deep", "light", "rem", "restlessness", "awake-count", "stress")},
+            "awakenings": sc.get("sleep-awake-count"), "avg_hr": sc.get("sleep-avg-hr"),
+            "avg_respiration": sc.get("sleep-avg-respiration"), "avg_spo2": sc.get("sleep-avg-spo2"),
+            "lowest_spo2": sc.get("sleep-min-spo2"), "avg_stress": sc.get("sleep-avg-stress"),
+        },
+        "hrv": {
+            "night_avg_ms": value(hrv), "night_5min_high_ms": hc.get("hrv-rmssd-night-5min-high"),
+            "weekly_avg_ms": hc.get("hrv-rmssd-7day-avg"), "status": hc.get("hrv-status"),
+            "balanced_range_ms": [(rr.get("low") or {}).get("value"), (rr.get("high") or {}).get("value")] if rr else None,
+            "readings": {"count": len(hrv_readings), "min": min((v for _, v in hrv_readings), default=None),
+                         "max": max((v for _, v in hrv_readings), default=None)},
+        },
+        "heart_rate": {
+            "resting": value(g("resting-hr")), "min": value(g("hr-min")), "max": value(g("hr-max")),
+            "resting_7day_avg": comps(g("resting-hr") or {}).get("resting-hr-7day-avg"),
+            "samples": len(hr), "awake_avg": rnd(mean(awake_hr)),
+            "hourly_avg": {f"{h:02d}": round(mean(v)) for h, v in sorted(hourly.items())},
+        },
+        "stress": {
+            "avg": value(stress), "max": stc.get("stress-max"), "qualifier": stc.get("stress-qualifier"),
+            "minutes": {k: stc.get(f"stress-{k}-duration") for k in ("rest", "low", "medium", "high", "activity", "uncategorized")},
+        },
+        "body_battery": {
+            "high": value(bb), "low": bc.get("body-battery-min"), "end_of_day": bc.get("body-battery-end"),
+            "charged": bc.get("body-battery-charged"), "drained": bc.get("body-battery-drained"),
+            "points": [{"time": t.astimezone(tz).strftime("%H:%M"), "level": v} for t, v in bb_points],
+            "events": events,
+        },
+        "activity": {
+            "steps": value(steps), "step_goal": stp.get("step-goal"), "distance_m": value(g("distance")),
+            "floors_up": value(g("floors-up")), "calories_total": value(g("calories-total")),
+            "calories_active": value(g("calories-active")),
+            "moderate_min": value(g("moderate-minutes")), "vigorous_min": value(g("vigorous-minutes")),
+        },
+        "spo2": {"avg": value(g("spo2-avg")), "hourly": {t.astimezone(tz).strftime("%H"): v for t, v in spo2},
+                 "respiration_avg": value(g("respiration-avg"))},
+        "workouts": [{k: w[k] for k in ("activity", "start", "end", "type", "minutes", "distance_m", "avg_hr")} for w in workouts],
+        "compared_with_previous_28_days": {k: compare(this[k], col(k)) for k in this},
+        "data_notes": [
+            "Source: local Medplum (daily and intraday Observations). Sleep is the night that ended on this morning.",
+            f"Comparison: the {BASELINE_DAYS} days before this day ({(day - dt.timedelta(days=BASELINE_DAYS))} to "
+            f"{day - dt.timedelta(days=1)}); days_lower = how many of them had a lower value.",
+            "HRV is RMSSD against your balanced range. Stress, Body Battery and sleep score are Garmin's own 0-100 scales.",
+        ] + (["This is today: last night's sleep, HRV and resting heart rate are final; steps, stress, Body Battery low "
+              "and calories are partial and left out of the comparison."] if partial else [])
+          + (["Recent days may still change (watch sync)."] if today - day <= dt.timedelta(days=1) and not partial else []),
+    }
+    series = {"day": day, "tz": tz, "hr": hr, "hrv": hrv_readings, "spo2": spo2, "bb": bb_points, "events": events,
+              "sleep": sleep_window, "workouts": workouts, "stages": stages, "need": sc.get("sleep-need"),
+              "balanced": facts["hrv"]["balanced_range_ms"], "night_avg": value(hrv), "resting": value(g("resting-hr")),
+              "stress_min": facts["stress"]["minutes"]}
+    return facts, series
+
+
+# --------------------------------------------------------------------------
 # Language: every visible string of the PDF and the charts
 # --------------------------------------------------------------------------
 
@@ -597,6 +754,84 @@ LABELS_VI = {
     "benefit.VO2MAX": "VO2 max", "benefit.ANAEROBIC_CAPACITY": "Năng lực kỵ khí", "benefit.SPEED": "Tốc độ",
     "benefit.RECOVERY": "Phục hồi",
 }
+
+
+LABELS_EN.update({
+    "long_day": "{wdl} {d:02d} {mon} {y}",
+    "day_title": "Daily report: {date}",
+    "day_subtitle": "One day of Garmin data, compared with the previous 28 days ({start} to {end})",
+    "d_sleep": "sleep (score)", "d_hrv": "overnight HRV (status)", "d_rhr": "resting heart rate",
+    "d_bb": "Body Battery high / low", "d_stress": "average stress", "d_steps": "steps / goal",
+    "d_active": "active calories", "d_intensity": "intensity minutes, moderate / vigorous",
+    "c_day_hr": "Heart rate through the day", "resting_hr_line": "resting",
+    "c_day_hr_caption": "Heart rate every 2 minutes; grey: sleep, blue: workouts; dashed: resting heart rate",
+    "c_day_bb": "Body Battery through the day",
+    "c_day_bb_caption": "Body Battery level, with what charged or drained it (the event ends at the label)",
+    "c_night_hrv": "HRV during the night", "night_avg": "night average",
+    "c_spo2": "Blood oxygen, hourly",
+    "c_night_caption": "Overnight HRV every 5 minutes against your balanced range, and SpO2 by hour (wrist sensor)",
+    "c_stages": "Last night's sleep by stage (minutes)",
+    "c_stages_caption": "Sleep stages against your sleep need for the night",
+    "c_stress_levels": "Time at each stress level", "c_stress_caption": "How the day's stress was spread",
+    "st_rest": "Rest (0-25)", "st_low": "Low (26-50)", "st_medium": "Medium (51-75)", "st_high": "High (76-100)",
+    "st_activity": "Too active to measure", "st_unknown": "No reading",
+    "tb_baseline": "Compared with your previous 28 days", "h_this_day": "this day", "h_avg28": "28-day average",
+    "h_range28": "28-day range", "h_diff": "difference", "h_days_lower": "days lower",
+    "b_sleep": "sleep", "b_score": "sleep score", "b_hrv": "overnight HRV", "b_rhr": "resting heart rate",
+    "b_stress": "average stress", "b_bb": "Body Battery high", "b_bb_low": "Body Battery low", "b_steps": "steps",
+    "b_resp": "respiration (breaths/min)", "b_spo2": "SpO2",
+    "tb_sleep": "Sleep and night details", "sd_window": "sleep window", "sd_need": "sleep need",
+    "sd_stages": "deep / light / REM / awake", "sd_awakenings": "awakenings",
+    "sd_vitals": "heart rate / respiration / SpO2 during sleep", "sd_lowest_spo2": "lowest SpO2 during sleep",
+    "sd_stress": "stress during sleep", "sd_quality": "Garmin's sleep ratings", "sd_hrv_range": "HRV readings, lowest - highest",
+    "sd_hr_day": "heart rate through the day", "awake_avg": "awake average",
+    "sq_duration": "duration", "sq_deep": "deep", "sq_light": "light", "sq_rem": "REM", "sq_restlessness": "restlessness",
+    "sq_awake_count": "awakenings", "sq_stress": "stress",
+    "quality.EXCELLENT": "excellent", "quality.GOOD": "good", "quality.FAIR": "fair", "quality.POOR": "poor",
+    "event.SLEEP": "sleep", "event.ACTIVITY": "activity", "event.NAP": "nap", "event.RECOVERY": "rest",
+    "event.STRESS": "stress",
+    "stressq.calm": "calm", "stressq.balanced": "balanced", "stressq.stressful": "stressful",
+    "stressq.very_stressful": "very stressful",
+})
+
+LABELS_VI.update({
+    "long_day": "{wdl}, {d:02d}/{m:02d}/{y}",
+    "day_title": "Báo cáo ngày: {date}",
+    "day_subtitle": "Dữ liệu Garmin của một ngày, so với 28 ngày trước đó ({start} đến {end})",
+    "d_sleep": "giấc ngủ (điểm)", "d_hrv": "HRV ban đêm (trạng thái)", "d_rhr": "nhịp tim nghỉ",
+    "d_bb": "Body Battery cao / thấp", "d_stress": "căng thẳng trung bình", "d_steps": "số bước / mục tiêu",
+    "d_active": "năng lượng vận động", "d_intensity": "phút cường độ, vừa / cao",
+    "c_day_hr": "Nhịp tim trong ngày", "resting_hr_line": "nghỉ",
+    "c_day_hr_caption": "Nhịp tim mỗi 2 phút; xám: lúc ngủ, xanh: buổi tập; nét đứt: nhịp tim nghỉ",
+    "c_day_bb": "Body Battery trong ngày",
+    "c_day_bb_caption": "Mức Body Battery, cùng những gì đã nạp hoặc tiêu hao (sự kiện kết thúc tại nhãn)",
+    "c_night_hrv": "HRV trong đêm", "night_avg": "trung bình đêm",
+    "c_spo2": "Oxy trong máu, theo giờ",
+    "c_night_caption": "HRV ban đêm mỗi 5 phút so với khoảng cân bằng của bạn, và SpO2 theo giờ (cảm biến cổ tay)",
+    "c_stages": "Giấc ngủ đêm qua theo giai đoạn (phút)",
+    "c_stages_caption": "Các giai đoạn ngủ so với nhu cầu ngủ của đêm",
+    "c_stress_levels": "Thời gian ở mỗi mức căng thẳng", "c_stress_caption": "Mức căng thẳng phân bố trong ngày",
+    "st_rest": "Nghỉ ngơi (0-25)", "st_low": "Thấp (26-50)", "st_medium": "Trung bình (51-75)", "st_high": "Cao (76-100)",
+    "st_activity": "Vận động, không đo được", "st_unknown": "Không có số liệu",
+    "tb_baseline": "So với 28 ngày trước đó", "h_this_day": "ngày này", "h_avg28": "trung bình 28 ngày",
+    "h_range28": "khoảng 28 ngày", "h_diff": "chênh lệch", "h_days_lower": "số ngày thấp hơn",
+    "b_sleep": "giấc ngủ", "b_score": "điểm giấc ngủ", "b_hrv": "HRV ban đêm", "b_rhr": "nhịp tim nghỉ",
+    "b_stress": "căng thẳng trung bình", "b_bb": "Body Battery cao nhất", "b_bb_low": "Body Battery thấp nhất",
+    "b_steps": "số bước", "b_resp": "nhịp thở (lần/phút)", "b_spo2": "SpO2",
+    "tb_sleep": "Giấc ngủ và ban đêm", "sd_window": "khung giờ ngủ", "sd_need": "nhu cầu ngủ",
+    "sd_stages": "sâu / nông / REM / thức", "sd_awakenings": "số lần thức giấc",
+    "sd_vitals": "nhịp tim / nhịp thở / SpO2 khi ngủ", "sd_lowest_spo2": "SpO2 thấp nhất khi ngủ",
+    "sd_stress": "căng thẳng khi ngủ", "sd_quality": "đánh giá giấc ngủ của Garmin",
+    "sd_hrv_range": "HRV từng lần đo, thấp nhất - cao nhất", "sd_hr_day": "nhịp tim trong ngày",
+    "awake_avg": "trung bình khi thức",
+    "sq_duration": "thời lượng", "sq_deep": "ngủ sâu", "sq_light": "ngủ nông", "sq_rem": "REM",
+    "sq_restlessness": "trằn trọc", "sq_awake_count": "số lần thức", "sq_stress": "căng thẳng",
+    "quality.EXCELLENT": "rất tốt", "quality.GOOD": "tốt", "quality.FAIR": "khá", "quality.POOR": "kém",
+    "event.SLEEP": "ngủ", "event.ACTIVITY": "vận động", "event.NAP": "ngủ trưa", "event.RECOVERY": "nghỉ ngơi",
+    "event.STRESS": "căng thẳng",
+    "stressq.calm": "thư thái", "stressq.balanced": "cân bằng", "stressq.stressful": "căng thẳng",
+    "stressq.very_stressful": "rất căng thẳng",
+})
 
 BUILT_IN_LABELS = {"en": LABELS_EN, "vi": LABELS_VI}
 
@@ -852,7 +1087,11 @@ def wellness_charts(series: dict, workdir: Path, L: Labels, fonts) -> list[tuple
     days = series["days"]
     xs = [dt.date.fromisoformat(d["date"]) for d in days]
     many = len(days) > 10
-    period = (series["from"] - dt.timedelta(days=0.6), series["to"] + dt.timedelta(days=0.6))
+    # datetime, not date: date - timedelta(days=0.6) drops the fraction, which
+    # leaves a one-day period with identical x limits and clips the edge bars.
+    start = dt.datetime.combine(series["from"], dt.time())
+    end = dt.datetime.combine(series["to"], dt.time())
+    period = (start - dt.timedelta(days=0.6), end + dt.timedelta(days=0.6))
 
     def fmt(ax):
         ax.set_xlim(*period)
@@ -1156,6 +1395,184 @@ def render_wellness(facts: dict, series: dict, narrative: dict, out: Path, font=
                   notes or facts["data_notes"], L, fonts)
 
 
+def day_charts(series: dict, workdir: Path, L: Labels, fonts) -> list[tuple[str, Path]]:
+    plt = _plt(fonts)
+    import matplotlib.dates as mdates
+    tz, day = series["tz"], series["day"]
+    local = lambda t: t.astimezone(tz).replace(tzinfo=None)
+    d0 = dt.datetime.combine(day, dt.time())
+    d1 = d0 + dt.timedelta(days=1)
+
+    def clock(ax, start=d0, end=d1, step=3):
+        ax.set_xlim(start, end)
+        ax.xaxis.set_major_locator(mdates.HourLocator(interval=step))
+        ax.xaxis.set_major_formatter(mdates.DateFormatter("%H:%M"))
+        ax.tick_params(axis="x", labelsize=7)
+
+    def shade_context(ax):
+        if series["sleep"]:
+            s, e = local(dt.datetime.fromisoformat(series["sleep"]["start"])), local(dt.datetime.fromisoformat(series["sleep"]["end"]))
+            ax.axvspan(max(s, d0), min(e, d1), color=MUTED, alpha=0.13, lw=0)
+        for w in series["workouts"]:
+            ax.axvspan(local(dt.datetime.fromisoformat(w["start"])), local(dt.datetime.fromisoformat(w["end"])),
+                       color=SERIES[0], alpha=0.15, lw=0)
+
+    def gapped(points, max_gap):
+        """x/y lists with a break (None) wherever samples are missing, so the line never bridges a gap."""
+        xs, ys = [], []
+        for i, (t, v) in enumerate(points):
+            if i and t - points[i - 1][0] > max_gap:
+                xs.append(local(t)), ys.append(None)
+            xs.append(local(t)), ys.append(v)
+        return xs, [float("nan") if v is None else v for v in ys]
+
+    charts = []
+    fig, ax = plt.subplots(figsize=(7.2, 2.4))
+    shade_context(ax)
+    if series["hr"]:
+        ax.plot(*gapped(series["hr"], dt.timedelta(minutes=5)), color=SERIES[0], lw=1.1)
+    else:
+        ax.text(0.5, 0.5, L("no_data"), ha="center", va="center", color=MUTED, transform=ax.transAxes)
+    if series["resting"]:
+        ax.axhline(series["resting"], color=INK2, lw=0.9, ls="--")
+        ax.text(1.005, series["resting"], L("resting_hr_line"), transform=ax.get_yaxis_transform(), va="center",
+                fontsize=7, color=INK2)
+    _title(ax, f"{L('c_day_hr')} (bpm)")
+    clock(ax)
+    charts.append((L("c_day_hr_caption"), _save(fig, workdir / "day_hr.png")))
+
+    if series["bb"]:
+        fig, ax = plt.subplots(figsize=(7.2, 2.2))
+        shade_context(ax)
+        ax.plot([local(t) for t, _ in series["bb"]], [v for _, v in series["bb"]], "-o", color=SERIES[0], markersize=3.5)
+        for e in series["events"]:
+            end = local(dt.datetime.fromisoformat(e["end"]))
+            if d0 <= end <= d1:
+                level = min(series["bb"], key=lambda p: abs(local(p[0]) - end))[1]
+                ax.annotate(f"{'+' if e['impact'] > 0 else ''}{e['impact']} {L.value('event', e['type'])}", (end, level),
+                            xytext=(4, 6), textcoords="offset points", fontsize=7, color=INK)
+        ax.set_ylim(0, 100)
+        _title(ax, L("c_day_bb") + " (0-100)")
+        clock(ax)
+        charts.append((L("c_day_bb_caption"), _save(fig, workdir / "day_bb.png")))
+
+    panels = []
+    if series["hrv"]:
+        panels.append("hrv")
+    if series["spo2"]:
+        panels.append("spo2")
+    if panels:
+        fig, axes = plt.subplots(1, len(panels), figsize=(7.2, 2.1), squeeze=False)
+        for ax, kind in zip(axes[0], panels):
+            if kind == "hrv":
+                lo, hi = series["balanced"] or (None, None)
+                if lo and hi:
+                    ax.axhspan(lo, hi, color=SERIES[0], alpha=0.12, lw=0, label=L("balanced"))
+                xs, ys = gapped(series["hrv"], dt.timedelta(minutes=12))
+                ax.plot(xs, ys, color=SERIES[0], lw=1.1)
+                if series["night_avg"]:
+                    ax.axhline(series["night_avg"], color=INK2, lw=0.9, ls="--", label=L("night_avg"))
+                ax.legend(frameon=False, fontsize=7, loc="upper left", bbox_to_anchor=(0, -0.2), ncol=2)
+                _title(ax, f"{L('c_night_hrv')} (ms)")
+                clock(ax, xs[0] - dt.timedelta(minutes=15), xs[-1] + dt.timedelta(minutes=15), step=2)
+            else:
+                xs = [local(t) for t, _ in series["spo2"]]
+                ax.bar(xs, [v for _, v in series["spo2"]], width=1 / 24 * 0.8, color=SERIES[0], edgecolor=SURFACE, linewidth=1)
+                ax.set_ylim(max(80, min(v for _, v in series["spo2"]) - 3), 100)
+                _title(ax, L("c_spo2") + " (%)")
+                clock(ax, step=6)
+        charts.append((L("c_night_caption"), _save(fig, workdir / "day_night.png")))
+
+    stages = [(L("s_deep"), series["stages"]["deep"]), (L("s_light"), series["stages"]["light"]),
+              (L("s_rem"), series["stages"]["rem"]), (L("s_awake"), series["stages"]["awake"])]
+    if any(v for _, v in stages):
+        fig, ax = plt.subplots(figsize=(7.2, 1.7))
+        left = 0
+        for (name, v), color in zip(stages, SERIES):
+            v = v or 0
+            ax.barh([0], [v], left=left, color=color, edgecolor=SURFACE, linewidth=2, height=0.5, label=name)
+            if v >= 25:                                   # label segments wide enough to hold text
+                ax.text(left + v / 2, 0, f"{L.n(round(v))}", ha="center", va="center", fontsize=7.5, color=SURFACE)
+            left += v
+        if series["need"]:
+            ax.plot([series["need"]] * 2, [-0.38, 0.38], color=INK, lw=1.5)
+            ax.text(series["need"], 0.42, f"{L('s_need')} {L.hm(series['need'])}", fontsize=7, color=INK, ha="center", va="bottom")
+        ax.set_ylim(-0.6, 0.75)
+        ax.set_yticks([])
+        ax.set_xlim(0, max(left, series["need"] or 0) * 1.06)
+        ax.legend(frameon=False, fontsize=7, ncol=4, loc="upper left", bbox_to_anchor=(0, -0.42))
+        _title(ax, L("c_stages"))
+        ax.grid(axis="y", visible=False)
+        charts.append((L("c_stages_caption"), _save(fig, workdir / "day_sleep.png")))
+
+    levels = [("rest", L("st_rest")), ("low", L("st_low")), ("medium", L("st_medium")), ("high", L("st_high")),
+              ("activity", L("st_activity")), ("uncategorized", L("st_unknown"))]
+    mins = series["stress_min"]
+    if any(mins.get(k) for k, _ in levels):
+        fig, ax = plt.subplots(figsize=(7.2, 1.9))
+        colors = [RAMP[0], RAMP[1], RAMP[3], RAMP[4], MUTED, GRID]
+        vals = [mins.get(k) or 0 for k, _ in levels]
+        ax.barh([name for _, name in levels], vals, color=colors, height=0.6)
+        total = sum(vals) or 1
+        for i, v in enumerate(vals):
+            ax.text(v, i, f"  {L.n(v)} {L('min')} ({L.n(round(100 * v / total))}%)", va="center", fontsize=7, color=INK2)
+        ax.invert_yaxis()
+        ax.set_xlim(0, max(vals) * 1.25)
+        ax.grid(axis="y", visible=False)
+        _title(ax, L("c_stress_levels"))
+        charts.append((L("c_stress_caption"), _save(fig, workdir / "day_stress.png")))
+    return charts
+
+
+def render_day(facts: dict, series: dict, narrative: dict, out: Path, font=None, font_bold=None) -> None:
+    import tempfile
+    L, fonts, notes = prepare(narrative, font, font_bold)
+    s, h, hr, st, bb, act, cmp = (facts["sleep"], facts["hrv"], facts["heart_rate"], facts["stress"], facts["body_battery"],
+                                  facts["activity"], facts["compared_with_previous_28_days"])
+    day = dt.date.fromisoformat(facts["date"])
+    with tempfile.TemporaryDirectory() as tmp:
+        charts = day_charts(series, Path(tmp), L, fonts)
+        tiles = [(L("d_sleep"), f"{L.hm(s['minutes'])} ({L.n(s['score'])})"),
+                 (L("d_hrv"), f"{L.n(h['night_avg_ms'], ' ms')} ({L.value('status', h['status'])})"),
+                 (L("d_rhr"), L.n(hr["resting"], " bpm")),
+                 (L("d_bb"), f"{L.n(bb['high'])} / {L.n(bb['low'])}"),
+                 (L("d_stress"), f"{L.n(st['avg'])} ({L.value('stressq', st['qualifier'])})" if st.get("qualifier") else L.n(st["avg"])),
+                 (L("d_steps"), f"{L.n(act['steps'])} / {L.n(act['step_goal'])}"),
+                 (L("d_active"), L.n(act["calories_active"], " kcal")),
+                 (L("d_intensity"), f"{L.n(act['moderate_min'])} / {L.n(act['vigorous_min'])}")]
+        whole = lambda v: L.n(None if v is None else round(v))
+        rows = [("b_sleep", "sleep_min", L.hm), ("b_score", "sleep_score", L.n), ("b_hrv", "hrv_ms", lambda v: L.n(v, " ms")),
+                ("b_rhr", "resting_hr", lambda v: L.n(v, " bpm")), ("b_stress", "stress_avg", L.n), ("b_bb", "bb_max", L.n),
+                ("b_bb_low", "bb_min", L.n), ("b_steps", "steps", whole), ("b_resp", "respiration_avg", L.n),
+                ("b_spo2", "spo2_avg", lambda v: L.n(v, " %"))]
+        diff_fmt = {"sleep_min": lambda v: L.n(round(v), " " + L("min")), "steps": whole}
+        signed = lambda v, key, f: "-" if v is None else ("+" if v > 0 else "") + diff_fmt.get(key, f)(v)
+        baseline = [[L("h_measure"), L("h_this_day"), L("h_avg28"), L("h_range28"), L("h_diff"), L("h_days_lower")]] + [
+            [L(label), fmt(c["this_day"]), fmt(c["avg"]), f"{fmt(c['min'])} - {fmt(c['max'])}" if c["min"] is not None else "-",
+             signed(c["diff"], key, fmt), f"{c['days_lower']} / {c['days']}" if c["days_lower"] is not None else "-"]
+            for label, key, fmt in rows for c in [cmp[key]]]
+        window = (f"{s['start'][11:16]} - {s['end'][11:16]}" if s.get("start") else "-")
+        sleep_rows = [[L("h_measure"), L("h_value")],
+                      [L("sd_window"), window], [L("sd_need"), L.hm(s["need_min"])],
+                      [L("sd_stages"), " / ".join(f"{L.n(s['stages_pct'][k])}%" for k in ("deep", "light", "rem", "awake"))],
+                      [L("sd_awakenings"), L.n(s["awakenings"])],
+                      [L("sd_vitals"), f"{L.n(s['avg_hr'], ' bpm')} / {L.n(s['avg_respiration'])} / {L.n(s['avg_spo2'], ' %')}"],
+                      [L("sd_lowest_spo2"), L.n(s["lowest_spo2"], " %")], [L("sd_stress"), L.n(s["avg_stress"])],
+                      [L("sd_quality"), ", ".join(f"{L('sq_' + k.replace('-', '_'))}: {L.value('quality', v)}"
+                                                  for k, v in s["sub_scores"].items() if v)],
+                      [L("sd_hrv_range"), f"{L.n(h['readings']['min'])} - {L.n(h['readings']['max'])} ms" if h["readings"]["count"] else "-"],
+                      [L("sd_hr_day"), f"{L.n(hr['min'])} - {L.n(hr['max'])} bpm, {L('awake_avg')} {L.n(hr['awake_avg'])}"]]
+        workouts = [[L("h_time"), L("h_type"), L("h_minutes"), L("h_distance"), L("h_avg_hr")]] + [
+            [w["start"][11:16], L.value("type", w["type"]), L.n(w["minutes"]), L.n(round((w["distance_m"] or 0) / 1000, 2), " km"),
+             L.n(w["avg_hr"])] for w in facts["workouts"]]
+        build_pdf(out, L("day_title", date=L.date(day, "long_day")) + (f" {L('in_progress')}" if facts["partial_day"] else ""),
+                  L("day_subtitle", start=(day - dt.timedelta(days=BASELINE_DAYS)).isoformat(),
+                    end=(day - dt.timedelta(days=1)).isoformat()),
+                  tiles, narrative, charts,
+                  [(L("tb_baseline"), baseline), (L("tb_sleep"), sleep_rows), (L("tb_workouts"), workouts)],
+                  notes or facts["data_notes"], L, fonts)
+
+
 # --------------------------------------------------------------------------
 # Command line
 # --------------------------------------------------------------------------
@@ -1173,7 +1590,9 @@ def main(argv: list[str]) -> int:
     w.add_argument("--month")
     w.add_argument("--from", dest="start")
     w.add_argument("--to", dest="end")
-    for s in (a, w):
+    dy = sub.add_parser("day", help="one day: intraday detail against the previous 28 days")
+    dy.add_argument("--date", required=True, metavar="YYYY-MM-DD")
+    for s in (a, w, dy):
         g = s.add_mutually_exclusive_group(required=True)
         g.add_argument("--facts", metavar="FILE", help="write the computed facts as JSON (step 1)")
         g.add_argument("--narrative", metavar="FILE", help="render the PDF with this narrative (step 2)")
@@ -1187,9 +1606,20 @@ def main(argv: list[str]) -> int:
     if args.kind == "labels":
         print(json.dumps(Labels(args.lang).table, indent=1, ensure_ascii=False))
         return 0
+    if args.kind == "wellness" and args.start and args.end and args.start == args.end and not (args.week or args.month):
+        args.kind, args.date = "day", args.start            # a one-day range is a daily report
     if args.kind == "activity":
         facts, series = activity_facts(args.activity, route=args.route)
         default = REPORT_DIR / f"activity-{facts['activity']}.pdf"
+    elif args.kind == "day":
+        try:
+            day = dt.date.fromisoformat(args.date)
+        except ValueError:
+            fail(f"--date {args.date!r} is not YYYY-MM-DD")
+        if day > dt.date.today():
+            fail("--date is in the future")
+        facts, series = day_facts(day)
+        default = REPORT_DIR / f"day-{day.isoformat()}.pdf"
     else:
         start, end, label, period = period_from_args(args)
         facts, series = wellness_facts(start, end, label)
@@ -1203,7 +1633,8 @@ def main(argv: list[str]) -> int:
         return 0
     narrative = load_narrative(args.narrative)
     out = Path(args.out) if args.out else default
-    (render_activity if args.kind == "activity" else render_wellness)(facts, series, narrative, out, args.font, args.font_bold)
+    render = {"activity": render_activity, "wellness": render_wellness, "day": render_day}[args.kind]
+    render(facts, series, narrative, out, args.font, args.font_bold)
     print(f"report written to {out}")
     return 0
 

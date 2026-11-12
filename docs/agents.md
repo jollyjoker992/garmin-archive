@@ -100,6 +100,8 @@ python3 tools/garmin_report.py activity <activity> --facts facts.json
 python3 tools/garmin_report.py activity <activity> --narrative narrative.json   # -> data/reports/activity-<id>.pdf
 python3 tools/garmin_report.py wellness --week 2026-W45 --facts facts.json      # or --month 2026-10, --from/--to
 python3 tools/garmin_report.py wellness --week 2026-W45 --narrative narrative.json
+python3 tools/garmin_report.py day --date 2026-11-11 --facts facts.json          # one day vs the previous 28 days
+python3 tools/garmin_report.py day --date 2026-11-11 --narrative narrative.json  # -> data/reports/day-2026-11-11.pdf
 ```
 
 The script computes the facts and draws the charts; the evaluation and
