@@ -5,6 +5,7 @@ data/
 .git/
 .claude/
 .agents/
+.gemini/
 **/node_modules/
 **/__pycache__/
 *.pyc

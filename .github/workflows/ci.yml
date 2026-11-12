@@ -52,7 +52,7 @@ jobs:
             run-daily.sh docker/entrypoint.sh docker/create-s3-key.sh
       - name: JSON files parse
         run: |
-          for f in .mcp.json fhir/*.json fhir/examples/*.json docs/manifest.schema.json; do
+          for f in .mcp.json .gemini/settings.json fhir/*.json fhir/examples/*.json docs/manifest.schema.json; do
             python3 -m json.tool "$f" > /dev/null || { echo "invalid JSON: $f"; exit 1; }
           done
       - name: Compose files resolve
