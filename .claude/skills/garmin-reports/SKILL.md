@@ -52,10 +52,12 @@ results computed from it).
 Write `/tmp/garmin-report/narrative.json`:
 
 ```json
-{"headline": "one sentence: the single most important finding",
+{"language": "vi",
+ "headline": "one sentence: the single most important finding",
  "summary": "3-5 sentences: what happened, with the key numbers",
  "evaluation": ["4-6 findings, each with its numbers and what they mean"],
- "recommendations": ["3-6 concrete next steps, each tied to a finding above"]}
+ "recommendations": ["3-6 concrete next steps, each tied to a finding above"],
+ "data_notes": ["optional: the facts' data_notes, translated"]}
 ```
 
 Rules:
@@ -94,6 +96,31 @@ What to look at:
 | `summary.stress_avg`, `bb_max`, `bb_min` | daytime load and recharge |
 | `summary.steps`, `intensity_minutes_total`, `workouts` | movement and training volume |
 | `change_vs_previous_avg`, `best_and_worst` | direction of travel and outliers |
+
+## Language
+
+Write the report in the language the person asked for, or the one they wrote
+in. Set `"language"` in `narrative.json` (`"en"`, `"vi"`, `"ja"`, ...).
+
+- **English and Vietnamese are built in**: titles, chart labels, table headers,
+  weekday and month names, number separators and Garmin values (HRV status,
+  activity type, training benefit) all follow the language.
+- **Other languages**: run `python3 tools/garmin_report.py labels --lang en`,
+  translate every value (keep the keys, the `{placeholders}`, and the order of
+  the weekday list, Monday first, and the month lists, January first; set
+  `decimal_sep`/`thousands_sep`), and put the result in `"labels"`. The script
+  warns about every label left in English.
+- **Data notes**: translate the facts' `data_notes` into `"data_notes"`;
+  without it the English notes are printed.
+- **Fonts**: the default font (DejaVu Sans) covers Latin including Vietnamese,
+  Greek and Cyrillic. For Chinese, Japanese, Korean, Thai, Devanagari and other
+  scripts add `--font FILE.ttf` (and `--font-bold`); on macOS
+  `/System/Library/Fonts/Supplemental/Arial Unicode.ttf` covers many scripts,
+  on Linux use a Noto Sans `.ttf`. If the script stops with "has no glyphs
+  for ...", pick a font that covers those characters and run it again; never
+  drop or transliterate the characters instead. Right-to-left scripts (Arabic,
+  Hebrew) are not laid out correctly by the PDF library: say so before making
+  such a report.
 
 ## 3. Render and hand over
 

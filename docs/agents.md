@@ -106,6 +106,12 @@ The script computes the facts and draws the charts; the evaluation and
 recommendations in `narrative.json` are written by a person or an agent from
 those facts (the `garmin-reports` skill describes how).
 
+Reports can be in any language: set `"language"` in `narrative.json`. English
+and Vietnamese labels are built in; for others, translate the output of
+`python3 tools/garmin_report.py labels` into `"labels"`. The PDF embeds DejaVu
+Sans (Latin incl. Vietnamese, Greek, Cyrillic); pass `--font FILE.ttf` for other
+scripts. The script refuses to render characters the font cannot show.
+
 ## Skills
 
 - `.claude/skills/garmin-health-analysis/SKILL.md`: analysing the data (where each

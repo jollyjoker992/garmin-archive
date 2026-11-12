@@ -14,10 +14,19 @@ Period options for wellness: --week YYYY-Www | --month YYYY-MM | --from YYYY-MM-
 Activity option: --route adds the GPS route shape (off by default: it shows where you live and run).
 
 narrative.json:
-  {"headline": "one sentence",
+  {"language": "en",                       optional; built in: en, vi
+   "headline": "one sentence",
    "summary": "a short paragraph",
    "evaluation": ["finding grounded in the facts", ...],
-   "recommendations": ["concrete, actionable step", ...]}
+   "recommendations": ["concrete, actionable step", ...],
+   "data_notes": ["..."],                  optional: the facts' data_notes in the report language
+   "labels": {"summary": "...", ...}}      optional: titles, axes, table headers for other languages
+                                           (python3 tools/garmin_report.py labels --lang en lists them)
+
+Fonts: the PDF and charts embed DejaVu Sans (from matplotlib; covers Latin
+including Vietnamese, Greek, Cyrillic). For other scripts pass a TrueType font
+with --font FILE.ttf [--font-bold FILE.ttf] or GARMIN_REPORT_FONT(_BOLD); the
+script refuses to render text the font cannot show.
 
 Data comes from Medplum through tools/medplum_agent.py (read-only client); the
 activity report also decodes the workout's FIT file. Reports are written to
@@ -316,15 +325,15 @@ def period_from_args(args) -> tuple[dt.date, dt.date, str]:
     if args.week:
         year, week = args.week.upper().split("-W")
         start = dt.date.fromisocalendar(int(year), int(week), 1)
-        return start, start + dt.timedelta(days=6), f"week {args.week.upper()}"
+        return start, start + dt.timedelta(days=6), f"week {args.week.upper()}", {"kind": "week", "value": args.week.upper()}
     if args.month:
         year, month = (int(x) for x in args.month.split("-"))
         start = dt.date(year, month, 1)
         nxt = dt.date(year + (month == 12), month % 12 + 1, 1)
-        return start, nxt - dt.timedelta(days=1), start.strftime("%B %Y")
+        return start, nxt - dt.timedelta(days=1), start.strftime("%B %Y"), {"kind": "month", "value": args.month}
     if args.start and args.end:
         start, end = dt.date.fromisoformat(args.start), dt.date.fromisoformat(args.end)
-        return start, end, f"{start} to {end}"
+        return start, end, f"{start} to {end}", {"kind": "range", "value": f"{start}/{end}"}
     fail("wellness needs --week YYYY-Www, --month YYYY-MM, or --from and --to")
 
 
@@ -445,19 +454,255 @@ def wellness_facts(start: dt.date, end: dt.date, label: str) -> tuple[dict, dict
 
 
 # --------------------------------------------------------------------------
+# Language: every visible string of the PDF and the charts
+# --------------------------------------------------------------------------
+
+LABELS_EN = {
+    "summary": "Summary", "details": "Details", "evaluation": "Evaluation", "recommendations": "Recommendations",
+    "data_notes": "Data notes",
+    "disclaimer": "This report describes patterns in wearable data. It is not medical advice; see a clinician for symptoms or concerns.",
+    "footer": "garmin-archive report - generated {when}", "page": "page {n}",
+    "no_data": "no data", "minutes": "minutes", "min": "min", "and": "and",
+    "weekdays": ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
+    "weekdays_long": ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"],
+    "months": ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"],
+    "months_long": ["January", "February", "March", "April", "May", "June", "July", "August", "September",
+                    "October", "November", "December"],
+    "long_date": "{wd} {d:02d} {mon} {y}, {hh:02d}:{mi:02d}",
+    "chart_weekday": "{wd} {d:02d}", "chart_date": "{d:02d} {mon}",
+    "hm": "{h}h {m:02d}m",
+    "decimal_sep": ".", "thousands_sep": ",",
+    # activity report
+    "activity_title": "Activity report: {type}, {when}",
+    "activity_subtitle": "{start} to {end} ({offset}) - Garmin activity {id}",
+    "t_distance": "distance", "t_moving": "moving time", "t_pace": "average pace", "t_hr": "average / max HR",
+    "t_te": "aerobic / anaerobic TE", "t_load": "training load", "t_calories": "calories",
+    "t_power": "avg / normalized power",
+    "c_hr": "Heart rate", "c_hr_caption": "Heart rate, every second, with your heart-rate zones",
+    "c_pace": "Pace, 15 s average", "u_pace": "min/km, faster is up", "c_pace_caption": "Pace over time",
+    "c_elev": "Elevation", "c_cadence": "Cadence", "u_spm": "steps/min", "c_power": "Power, 15 s average",
+    "c_gct": "Ground contact time", "c_vo": "Vertical oscillation", "c_vr": "Vertical ratio", "c_step": "Step length",
+    "c_split_pace": "Pace per km (min/km)", "c_split_hr": "Average heart rate per km (bpm)",
+    "c_splits_caption": "Splits per kilometre",
+    "c_zones": "Time in heart-rate zones (minutes)", "c_zones_caption": "Time in heart-rate zones",
+    "z_below": "Below Z1", "z_above": "Above max",
+    "c_eff": "Efficiency: speed per heartbeat (m/s per 1000 bpm)", "c_eff_this": "this workout",
+    "c_eff_caption": "Efficiency of this workout (blue) against your workouts of the same type in the previous 8 weeks (grey)",
+    "c_route": "Route shape", "c_route_caption": "Route shape (GPS)",
+    "tb_splits": "Splits per kilometre", "tb_laps": "Laps (as recorded by the watch)", "tb_more": "More measures",
+    "h_km": "km", "h_time": "time", "h_pace": "pace", "h_avg_hr": "avg HR", "h_max_hr": "max HR",
+    "h_cadence": "cadence", "h_power": "power", "h_elev": "elev. +", "h_lap": "lap", "h_start": "start",
+    "h_distance": "distance", "h_avg_power": "avg power", "h_measure": "measure", "h_value": "value",
+    "m_elapsed": "elapsed time", "m_elev": "elevation gain / loss", "m_cadence": "average cadence",
+    "m_dynamics": "ground contact / vertical ratio / step length", "m_benefit": "primary benefit",
+    "m_decoupling": "aerobic decoupling (after 5 min)", "m_pace_cv": "pace variability (30 s, CV)",
+    "m_stamina": "stamina start / end", "m_bb": "Body Battery change", "m_feel": "feel / RPE",
+    "m_sweat": "sweat loss (estimate)", "m_sleep": "that morning: sleep / score", "m_hrv": "that morning: HRV / status",
+    "m_rhr": "that morning: resting HR / Body Battery max",
+    # wellness report
+    "wellness_title": "Wellness report: {label}", "in_progress": "(in progress)",
+    "p_week": "week {value}", "p_month": "{month} {year}", "p_range": "{start} to {end}",
+    "wellness_subtitle": "{start} to {end} - compared with {pstart} to {pend}",
+    "w_sleep": "average sleep", "w_score": "average sleep score", "w_hrv": "average overnight HRV",
+    "w_rhr": "average resting HR", "w_stress": "average stress", "w_bb": "average Body Battery high",
+    "w_steps": "steps per day", "w_workouts": "workouts / intensity minutes", "vs_prev": "({delta} vs previous)",
+    "c_sleep": "Sleep per night (hours, by stage)", "s_deep": "Deep", "s_light": "Light", "s_rem": "REM",
+    "s_awake": "Awake", "s_need": "Sleep need", "c_sleep_caption": "Sleep and its stages",
+    "c_score": "Sleep score", "c_hrv": "Overnight HRV", "u_hrv": "ms, RMSSD", "balanced": "balanced range",
+    "c_score_hrv_caption": "Sleep score and overnight HRV", "c_rhr": "Resting heart rate",
+    "c_stress": "Average stress (0-100)", "c_rhr_stress_caption": "Resting heart rate and stress",
+    "c_bb": "Body Battery, daily low to high (0-100)", "c_steps": "Steps", "goal": "Goal",
+    "c_bb_steps_caption": "Body Battery and steps", "c_workout_min": "Workout minutes per day",
+    "no_workouts": "no workouts recorded in this period", "c_training_caption": "Training",
+    "tb_daily": "Day by day", "tb_workouts": "Workouts", "h_date": "date", "h_sleep": "sleep", "h_score": "score",
+    "h_hrv": "HRV", "h_rhr": "RHR", "h_stress": "stress", "h_bb": "BB low-high", "h_steps": "steps", "h_type": "type",
+    "h_minutes": "minutes", "today_partial": "today, partial",
+    # Garmin values shown in the report
+    "status.BALANCED": "balanced", "status.UNBALANCED": "unbalanced", "status.LOW": "low", "status.POOR": "poor",
+    "status.NONE": "none",
+    "type.running": "Running", "type.walking": "Walking", "type.cycling": "Cycling", "type.hiking": "Hiking",
+    "type.swimming": "Swimming", "type.lap_swimming": "Pool swimming", "type.strength_training": "Strength training",
+    "type.treadmill_running": "Treadmill running", "type.trail_running": "Trail running", "type.yoga": "Yoga",
+    "benefit.AEROBIC_BASE": "Aerobic base", "benefit.TEMPO": "Tempo", "benefit.LACTATE_THRESHOLD": "Lactate threshold",
+    "benefit.VO2MAX": "VO2 max", "benefit.ANAEROBIC_CAPACITY": "Anaerobic capacity", "benefit.SPEED": "Speed",
+    "benefit.RECOVERY": "Recovery",
+}
+
+LABELS_VI = {
+    "summary": "Tóm tắt", "details": "Chi tiết", "evaluation": "Đánh giá", "recommendations": "Khuyến nghị",
+    "data_notes": "Ghi chú dữ liệu",
+    "disclaimer": "Báo cáo này mô tả các xu hướng trong dữ liệu từ thiết bị đeo. Đây không phải lời khuyên y tế; "
+                  "hãy gặp bác sĩ nếu bạn có triệu chứng hoặc lo ngại.",
+    "footer": "Báo cáo garmin-archive - tạo lúc {when}", "page": "trang {n}",
+    "no_data": "không có dữ liệu", "minutes": "phút", "min": "phút", "and": "và",
+    "weekdays": ["T2", "T3", "T4", "T5", "T6", "T7", "CN"],
+    "weekdays_long": ["Thứ Hai", "Thứ Ba", "Thứ Tư", "Thứ Năm", "Thứ Sáu", "Thứ Bảy", "Chủ Nhật"],
+    "months": ["Th1", "Th2", "Th3", "Th4", "Th5", "Th6", "Th7", "Th8", "Th9", "Th10", "Th11", "Th12"],
+    "months_long": ["Tháng 1", "Tháng 2", "Tháng 3", "Tháng 4", "Tháng 5", "Tháng 6", "Tháng 7", "Tháng 8",
+                    "Tháng 9", "Tháng 10", "Tháng 11", "Tháng 12"],
+    "long_date": "{wdl}, {d:02d}/{m:02d}/{y}, {hh:02d}:{mi:02d}",
+    "chart_weekday": "{wd} {d:02d}", "chart_date": "{d:02d}/{m:02d}",
+    "hm": "{h}h{m:02d}",
+    "decimal_sep": ",", "thousands_sep": ".",
+    "activity_title": "Báo cáo buổi tập: {type}, {when}",
+    "activity_subtitle": "{start} đến {end} ({offset}) - hoạt động Garmin {id}",
+    "t_distance": "quãng đường", "t_moving": "thời gian di chuyển", "t_pace": "pace trung bình",
+    "t_hr": "nhịp tim TB / tối đa", "t_te": "hiệu quả tập hiếu khí / kỵ khí", "t_load": "tải tập luyện",
+    "t_calories": "năng lượng tiêu hao", "t_power": "công suất TB / chuẩn hóa",
+    "c_hr": "Nhịp tim", "c_hr_caption": "Nhịp tim từng giây, cùng các vùng nhịp tim của bạn",
+    "c_pace": "Pace, trung bình 15 giây", "u_pace": "phút/km, nhanh hơn ở phía trên", "c_pace_caption": "Pace theo thời gian",
+    "c_elev": "Độ cao", "c_cadence": "Nhịp bước", "u_spm": "bước/phút", "c_power": "Công suất, trung bình 15 giây",
+    "c_gct": "Thời gian tiếp đất", "c_vo": "Dao động dọc", "c_vr": "Tỷ lệ dọc", "c_step": "Độ dài bước",
+    "c_split_pace": "Pace mỗi km (phút/km)", "c_split_hr": "Nhịp tim trung bình mỗi km (bpm)",
+    "c_splits_caption": "Chia theo từng kilômét",
+    "c_zones": "Thời gian trong các vùng nhịp tim (phút)", "c_zones_caption": "Thời gian trong các vùng nhịp tim",
+    "z_below": "Dưới Z1", "z_above": "Trên mức tối đa",
+    "c_eff": "Hiệu suất: tốc độ trên mỗi nhịp tim (m/s trên 1000 bpm)", "c_eff_this": "buổi tập này",
+    "c_eff_caption": "Hiệu suất của buổi tập này (xanh) so với các buổi tập cùng loại trong 8 tuần trước (xám)",
+    "c_route": "Hình dạng tuyến đường", "c_route_caption": "Hình dạng tuyến đường (GPS)",
+    "tb_splits": "Chia theo từng kilômét", "tb_laps": "Các vòng (theo đồng hồ ghi)", "tb_more": "Các chỉ số khác",
+    "h_km": "km", "h_time": "thời gian", "h_pace": "pace", "h_avg_hr": "NT TB", "h_max_hr": "NT tối đa",
+    "h_cadence": "nhịp bước", "h_power": "công suất", "h_elev": "độ cao +", "h_lap": "vòng", "h_start": "bắt đầu",
+    "h_distance": "quãng đường", "h_avg_power": "công suất TB", "h_measure": "chỉ số", "h_value": "giá trị",
+    "m_elapsed": "tổng thời gian", "m_elev": "độ cao lên / xuống", "m_cadence": "nhịp bước trung bình",
+    "m_dynamics": "tiếp đất / tỷ lệ dọc / độ dài bước", "m_benefit": "lợi ích chính",
+    "m_decoupling": "lệch nhịp hiếu khí (sau 5 phút)", "m_pace_cv": "độ dao động pace (30 giây, CV)",
+    "m_stamina": "sức bền đầu / cuối", "m_bb": "thay đổi Body Battery", "m_feel": "cảm nhận / RPE",
+    "m_sweat": "lượng mồ hôi mất (ước tính)", "m_sleep": "sáng hôm đó: giấc ngủ / điểm",
+    "m_hrv": "sáng hôm đó: HRV / trạng thái", "m_rhr": "sáng hôm đó: nhịp tim nghỉ / Body Battery cao nhất",
+    "wellness_title": "Báo cáo sức khỏe: {label}", "in_progress": "(đang diễn ra)",
+    "p_week": "tuần {value}", "p_month": "{month} năm {year}", "p_range": "{start} đến {end}",
+    "wellness_subtitle": "{start} đến {end} - so với {pstart} đến {pend}",
+    "w_sleep": "giấc ngủ trung bình", "w_score": "điểm giấc ngủ trung bình", "w_hrv": "HRV ban đêm trung bình",
+    "w_rhr": "nhịp tim nghỉ trung bình", "w_stress": "mức căng thẳng trung bình",
+    "w_bb": "Body Battery cao nhất trung bình", "w_steps": "số bước mỗi ngày",
+    "w_workouts": "buổi tập / phút cường độ", "vs_prev": "({delta} so với kỳ trước)",
+    "c_sleep": "Giấc ngủ mỗi đêm (giờ, theo giai đoạn)", "s_deep": "Ngủ sâu", "s_light": "Ngủ nông", "s_rem": "REM",
+    "s_awake": "Thức giấc", "s_need": "Nhu cầu ngủ", "c_sleep_caption": "Giấc ngủ và các giai đoạn",
+    "c_score": "Điểm giấc ngủ", "c_hrv": "HRV ban đêm", "u_hrv": "ms, RMSSD", "balanced": "khoảng cân bằng",
+    "c_score_hrv_caption": "Điểm giấc ngủ và HRV ban đêm", "c_rhr": "Nhịp tim nghỉ",
+    "c_stress": "Mức căng thẳng trung bình (0-100)", "c_rhr_stress_caption": "Nhịp tim nghỉ và mức căng thẳng",
+    "c_bb": "Body Battery thấp-cao mỗi ngày (0-100)", "c_steps": "Số bước", "goal": "Mục tiêu",
+    "c_bb_steps_caption": "Body Battery và số bước", "c_workout_min": "Số phút tập luyện mỗi ngày",
+    "no_workouts": "không có buổi tập nào trong giai đoạn này", "c_training_caption": "Tập luyện",
+    "tb_daily": "Từng ngày", "tb_workouts": "Các buổi tập", "h_date": "ngày", "h_sleep": "giấc ngủ", "h_score": "điểm",
+    "h_hrv": "HRV", "h_rhr": "NT nghỉ", "h_stress": "căng thẳng", "h_bb": "BB thấp-cao", "h_steps": "số bước",
+    "h_type": "loại", "h_minutes": "phút", "today_partial": "hôm nay, chưa đủ ngày",
+    "status.BALANCED": "cân bằng", "status.UNBALANCED": "mất cân bằng", "status.LOW": "thấp", "status.POOR": "kém",
+    "status.NONE": "không có",
+    "type.running": "Chạy bộ", "type.walking": "Đi bộ", "type.cycling": "Đạp xe", "type.hiking": "Leo núi",
+    "type.swimming": "Bơi", "type.lap_swimming": "Bơi hồ", "type.strength_training": "Tập sức mạnh",
+    "type.treadmill_running": "Chạy máy", "type.trail_running": "Chạy địa hình", "type.yoga": "Yoga",
+    "benefit.AEROBIC_BASE": "Nền tảng hiếu khí", "benefit.TEMPO": "Tempo", "benefit.LACTATE_THRESHOLD": "Ngưỡng lactate",
+    "benefit.VO2MAX": "VO2 max", "benefit.ANAEROBIC_CAPACITY": "Năng lực kỵ khí", "benefit.SPEED": "Tốc độ",
+    "benefit.RECOVERY": "Phục hồi",
+}
+
+BUILT_IN_LABELS = {"en": LABELS_EN, "vi": LABELS_VI}
+
+
+class Labels:
+    """Label lookup for one report: English, then the built-in language, then the narrative's own labels."""
+
+    def __init__(self, language: str = "en", extra: dict | None = None):
+        self.language = (language or "en").lower()
+        self.table = {**LABELS_EN, **BUILT_IN_LABELS.get(self.language.split("-")[0], {}), **(extra or {})}
+        self.fallback = [] if self.language.startswith("en") else sorted(
+            k for k in LABELS_EN if k not in BUILT_IN_LABELS.get(self.language.split("-")[0], {}) and k not in (extra or {}))
+
+    def __call__(self, key: str, **kw) -> str:
+        text = self.table[key]
+        return text.format(**kw) if kw else text
+
+    def value(self, prefix: str, raw) -> str:
+        """Translate a Garmin value (status, activity type, benefit) or prettify it."""
+        if raw is None:
+            return "-"
+        return self.table.get(f"{prefix}.{raw}") or str(raw).replace("_", " ").capitalize()
+
+    def date(self, d: dt.date | dt.datetime, template: str = "chart_date") -> str:
+        hh = getattr(d, "hour", 0)
+        mi = getattr(d, "minute", 0)
+        return self.table[template].format(wd=self.table["weekdays"][d.weekday()], wdl=self.table["weekdays_long"][d.weekday()],
+                                           d=d.day, m=d.month, mon=self.table["months"][d.month - 1], y=d.year, hh=hh, mi=mi)
+
+    def n(self, value, unit: str = "") -> str:
+        """A number with the language's separators ('-' when missing)."""
+        if value is None:
+            return "-"
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
+            return f"{value}{unit}"
+        text = f"{value:,}" if isinstance(value, int) or not float(value).is_integer() else f"{int(value):,}"
+        dec, thou = self.table.get("decimal_sep", "."), self.table.get("thousands_sep", ",")
+        text = text.replace(",", "\0").replace(".", dec).replace("\0", thou)
+        return f"{text}{unit}"
+
+    def hm(self, minutes) -> str:
+        return "-" if minutes is None else self.table["hm"].format(h=int(minutes // 60), m=int(minutes % 60))
+
+    def all_text(self) -> str:
+        return " ".join(" ".join(v) if isinstance(v, list) else str(v) for v in self.table.values())
+
+
+# --------------------------------------------------------------------------
+# Fonts: a TrueType font that covers the report's language, for PDF and charts
+# --------------------------------------------------------------------------
+
+
+def font_files(regular: str | None, bold: str | None) -> tuple[Path, Path]:
+    """--font/--font-bold, else GARMIN_REPORT_FONT(_BOLD), else DejaVu Sans shipped with matplotlib
+    (Latin incl. Vietnamese, Greek, Cyrillic). For Chinese, Japanese, Korean, Thai, Arabic ... pass a
+    TrueType (.ttf) font that covers the script, e.g. a Noto Sans *.ttf."""
+    regular = regular or os.environ.get("GARMIN_REPORT_FONT")
+    bold = bold or os.environ.get("GARMIN_REPORT_FONT_BOLD")
+    if not regular:
+        try:
+            import matplotlib
+        except ImportError:
+            fail(DEPS_HINT)
+        ttf = Path(matplotlib.get_data_path()) / "fonts" / "ttf"
+        regular, bold = str(ttf / "DejaVuSans.ttf"), bold or str(ttf / "DejaVuSans-Bold.ttf")
+    regular_path, bold_path = Path(regular).expanduser(), Path(bold or regular).expanduser()
+    for p in (regular_path, bold_path):
+        if not p.is_file():
+            fail(f"font file not found: {p}")
+        if p.suffix.lower() not in (".ttf", ".ttc"):
+            fail(f"{p} is not a TrueType font (.ttf); reportlab cannot embed OpenType/CFF fonts")
+    return regular_path, bold_path
+
+
+def check_font_covers(font: Path, text: str) -> None:
+    """Fail with the exact characters a font lacks, instead of printing boxes in the PDF."""
+    try:
+        from reportlab.pdfbase.ttfonts import TTFont
+    except ImportError:
+        fail(DEPS_HINT)
+    covered = set(TTFont("probe", str(font)).face.charToGlyph)
+    missing = sorted({c for c in text if ord(c) > 32 and ord(c) not in covered})
+    if missing:
+        fail(f"the font {font.name} has no glyphs for {''.join(missing[:40])!r}"
+             f"{' ...' if len(missing) > 40 else ''}; pass a TrueType font that covers the language with "
+             "--font FILE.ttf (and --font-bold), or set GARMIN_REPORT_FONT")
+
+
+# --------------------------------------------------------------------------
 # Charts (matplotlib)
 # --------------------------------------------------------------------------
 
 
-def _plt():
+def _plt(fonts: tuple[Path, Path]):
     try:
         import matplotlib
         matplotlib.use("Agg")
         import matplotlib.pyplot as plt
+        from matplotlib import font_manager
     except ImportError:
         fail(DEPS_HINT)
+    for f in fonts:
+        font_manager.fontManager.addfont(str(f))
+    family = font_manager.FontProperties(fname=str(fonts[0])).get_name()
     plt.rcParams.update({
-        "font.family": "DejaVu Sans", "font.size": 8, "axes.edgecolor": GRID, "axes.labelcolor": INK2,
+        "font.family": family, "font.size": 8, "axes.edgecolor": GRID, "axes.labelcolor": INK2,
         "axes.titlesize": 9, "axes.titleweight": "bold", "axes.titlecolor": INK, "axes.titlelocation": "left",
         "xtick.color": INK2, "ytick.color": INK2, "axes.grid": True, "grid.color": GRID, "grid.linewidth": 0.6,
         "axes.spines.top": False, "axes.spines.right": False, "figure.facecolor": SURFACE, "axes.facecolor": SURFACE,
@@ -474,107 +719,122 @@ def _save(fig, path: Path) -> Path:
     return path
 
 
-def _line(ax, x, y, title, unit, color=SERIES[0], invert=False):
+def _title(ax, text):
+    import textwrap
+    fig_w = ax.figure.get_size_inches()[0] * ax.get_position().width
+    ax.set_title(textwrap.fill(text, width=max(24, int(fig_w * 11))))
+
+
+def _line(ax, x, y, title, unit, L, color=SERIES[0]):
     pts = [(a, b) for a, b in zip(x, y) if b is not None]
     if not pts:
-        ax.text(0.5, 0.5, "no data", ha="center", va="center", color=MUTED, transform=ax.transAxes)
+        ax.text(0.5, 0.5, L("no_data"), ha="center", va="center", color=MUTED, transform=ax.transAxes)
     else:
         ax.plot([p[0] for p in pts], [p[1] for p in pts], color=color, solid_capstyle="round")
-    ax.set_title(f"{title} ({unit})")
-    if invert:
-        ax.invert_yaxis()
+    _title(ax, f"{title} ({unit})")
 
 
-def activity_charts(series: dict, workdir: Path) -> list[tuple[str, Path]]:
-    plt = _plt()
+def _date_axis(ax, L, template, maxticks=None):
+    import matplotlib.dates as mdates
+    from matplotlib.ticker import FuncFormatter
+    if maxticks:
+        ax.xaxis.set_major_locator(mdates.AutoDateLocator(minticks=3, maxticks=maxticks))
+    else:
+        ax.xaxis.set_major_locator(mdates.DayLocator())
+    ax.xaxis.set_major_formatter(FuncFormatter(lambda v, _: L.date(mdates.num2date(v), template)))
+    ax.tick_params(axis="x", labelsize=7)
+
+
+def activity_charts(series: dict, workdir: Path, L: Labels, fonts) -> list[tuple[str, Path]]:
+    plt = _plt(fonts)
     rows = series["rows"]
     t = [r["elapsed_s"] / 60 for r in rows]
     smooth = lambda k, w=15: rolling([r.get(k) for r in rows], w)
+    zone_name = lambda z: L("z_below") if z == "Below Z1" else L("z_above") if z == "Above max" else z
     charts = []
 
     fig, ax = plt.subplots(figsize=(7.2, 2.4))
     zones = [z for z in series["zones"] if z.get("from_bpm") and z.get("to_bpm")]
-    _line(ax, t, [r.get("heart_rate") for r in rows], "Heart rate", "bpm")
+    _line(ax, t, [r.get("heart_rate") for r in rows], L("c_hr"), "bpm", L)
     hrs = [r["heart_rate"] for r in rows if r.get("heart_rate")]
     lo, hi = (min(hrs) - 5, max(hrs) + 5) if hrs else (40, 200)
     for i, z in enumerate(zones):
         ax.axhspan(z["from_bpm"], z["to_bpm"], color=RAMP[min(i, len(RAMP) - 1)], alpha=0.10, lw=0)
         mid = (max(z["from_bpm"], lo) + min(z["to_bpm"], hi)) / 2
         if z["to_bpm"] > lo and z["from_bpm"] < hi:          # label only zones that are visible
-            ax.text(1.005, mid, z["zone"], transform=ax.get_yaxis_transform(), va="center", fontsize=7, color=INK2)
+            ax.text(1.005, mid, zone_name(z["zone"]), transform=ax.get_yaxis_transform(), va="center", fontsize=7, color=INK2)
     ax.set_ylim(lo, hi)
-    ax.set_xlabel("minutes")
-    charts.append(("Heart rate, every second, with your heart-rate zones", _save(fig, workdir / "hr.png")))
+    ax.set_xlabel(L("minutes"))
+    charts.append((L("c_hr_caption"), _save(fig, workdir / "hr.png")))
 
     paces = [p for p in smooth("pace_min_per_km") if p]
     if paces:
         srt = sorted(paces)
         lo, hi = srt[int(len(srt) * 0.05)], srt[int(len(srt) * 0.90) - 1]
         fig, ax = plt.subplots(figsize=(7.2, 2.2))
-        _line(ax, t, smooth("pace_min_per_km"), "Pace, 15 s average", "min/km, faster is up")
+        _line(ax, t, smooth("pace_min_per_km"), L("c_pace"), L("u_pace"), L)
         ax.set_ylim(hi + 0.6, lo - 0.4)                       # inverted: faster is up; slower stretches leave the frame
-        ax.set_xlabel("minutes")
-        charts.append(("Pace over time", _save(fig, workdir / "pace.png")))
+        ax.set_xlabel(L("minutes"))
+        charts.append((L("c_pace_caption"), _save(fig, workdir / "pace.png")))
 
     present = lambda k: any(r.get(k) is not None for r in rows)
     panels = [(k, ttl, unit) for k, ttl, unit in (
-        ("altitude_m", "Elevation", "m"), ("cadence_spm", "Cadence", "steps/min"), ("cadence_rpm", "Cadence", "rpm"),
-        ("power_w", "Power, 15 s average", "W"), ("ground_contact_ms", "Ground contact time", "ms"),
-        ("vertical_oscillation_mm", "Vertical oscillation", "mm"), ("vertical_ratio_pct", "Vertical ratio", "%"),
-        ("step_length_mm", "Step length", "mm")) if present(k)]
+        ("altitude_m", L("c_elev"), "m"), ("cadence_spm", L("c_cadence"), L("u_spm")), ("cadence_rpm", L("c_cadence"), "rpm"),
+        ("power_w", L("c_power"), "W"), ("ground_contact_ms", L("c_gct"), "ms"),
+        ("vertical_oscillation_mm", L("c_vo"), "mm"), ("vertical_ratio_pct", L("c_vr"), "%"),
+        ("step_length_mm", L("c_step"), "mm")) if present(k)]
     for i in range(0, len(panels), 2):
         pair = panels[i:i + 2]
         fig, axes = plt.subplots(1, len(pair), figsize=(7.2, 2.0), squeeze=False)
         for ax, (k, ttl, unit) in zip(axes[0], pair):
             ys = [r.get(k) for r in rows] if k == "altitude_m" else smooth(k)
-            _line(ax, t, ys, ttl, unit)
-            ax.set_xlabel("minutes")
-        charts.append((" and ".join(p[1] for p in pair), _save(fig, workdir / f"panel{i}.png")))
+            _line(ax, t, ys, ttl, unit, L)
+            ax.set_xlabel(L("minutes"))
+        charts.append((f" {L('and')} ".join(p[1] for p in pair), _save(fig, workdir / f"panel{i}.png")))
 
     splits = series["splits"]
     if splits:
         fig, axes = plt.subplots(1, 2, figsize=(7.2, 2.2))
         kms = [str(s["km"]) for s in splits]
         axes[0].bar(kms, [s["pace_min_per_km"] for s in splits], color=SERIES[0], width=0.6, edgecolor=SURFACE, linewidth=1.5)
-        axes[0].set_title("Pace per km (min/km)")
+        _title(axes[0], L("c_split_pace"))
         vals = [s["pace_min_per_km"] for s in splits if s["pace_min_per_km"]]
         axes[0].set_ylim(min(vals) * 0.9, max(vals) * 1.05)
         axes[1].bar(kms, [s["avg_hr"] for s in splits], color=SERIES[0], width=0.6, edgecolor=SURFACE, linewidth=1.5)
-        axes[1].set_title("Average heart rate per km (bpm)")
+        _title(axes[1], L("c_split_hr"))
         hv = [s["avg_hr"] for s in splits if s["avg_hr"]]
         axes[1].set_ylim(min(hv) - 15, max(hv) + 5)
         for ax in axes:
             ax.set_xlabel("km")
-        charts.append(("Splits per kilometre", _save(fig, workdir / "splits.png")))
+        charts.append((L("c_splits_caption"), _save(fig, workdir / "splits.png")))
 
     zones_t = [z for z in series["zones"] if z["time_s"] > 0 or z["zone"] not in ("Below Z1", "Above max")]
     if zones_t:
         fig, ax = plt.subplots(figsize=(7.2, 1.9))
-        labels = [f"{z['zone']} ({z['from_bpm'] or 0}-{z['to_bpm']})" if z.get("to_bpm") else z["zone"] for z in zones_t]
+        labels = [f"{zone_name(z['zone'])} ({z['from_bpm'] or 0}-{z['to_bpm']})" if z.get("to_bpm") else zone_name(z["zone"])
+                  for z in zones_t]
         colors = ([MUTED] if zones_t[0]["zone"] == "Below Z1" else []) + RAMP + [INK]
         ax.barh(labels, [z["time_s"] / 60 for z in zones_t], color=colors[:len(zones_t)], height=0.6)
         for i, z in enumerate(zones_t):
-            ax.text(z["time_s"] / 60, i, f"  {z['time_s'] / 60:.1f} min ({z['share_pct']}%)", va="center", fontsize=7, color=INK2)
+            ax.text(z["time_s"] / 60, i, f"  {z['time_s'] / 60:.1f} {L('min')} ({z['share_pct']}%)", va="center",
+                    fontsize=7, color=INK2)
         ax.invert_yaxis()
-        ax.set_title("Time in heart-rate zones (minutes)")
+        _title(ax, L("c_zones"))
         ax.grid(axis="y", visible=False)
-        charts.append(("Time in heart-rate zones", _save(fig, workdir / "zones.png")))
+        charts.append((L("c_zones_caption"), _save(fig, workdir / "zones.png")))
 
     hist = series["history"]
     if hist and series["this_ef"]:
         fig, ax = plt.subplots(figsize=(7.2, 1.9))
         xs = [dt.date.fromisoformat(h["date"]) for h in hist]
-        import matplotlib.dates as mdates
         ax.plot(xs, [h["speed_per_beat"] for h in hist], "o", color=MUTED, markersize=4)
         this_day = dt.date.fromisoformat(series["rows"][0]["time"][:10]) if series["rows"] else None
         ax.plot([this_day], [series["this_ef"]], "o", color=SERIES[0], markersize=7)
-        ax.annotate("this workout", (this_day, series["this_ef"]), xytext=(-8, 8), textcoords="offset points",
+        ax.annotate(L("c_eff_this"), (this_day, series["this_ef"]), xytext=(-8, 8), textcoords="offset points",
                     ha="right", fontsize=7, color=INK)
-        ax.xaxis.set_major_locator(mdates.AutoDateLocator(maxticks=6))
-        ax.xaxis.set_major_formatter(mdates.DateFormatter("%d %b"))
-        ax.set_title("Efficiency: speed per heartbeat (m/s per 1000 bpm)")
-        charts.append(("Efficiency of this workout (blue) against your workouts of the same type in the previous 8 weeks (grey)",
-                       _save(fig, workdir / "trend.png")))
+        _date_axis(ax, L, "chart_date", maxticks=6)
+        _title(ax, L("c_eff"))
+        charts.append((L("c_eff_caption"), _save(fig, workdir / "trend.png")))
 
     if series["route"] and any("lat" in r for r in rows):
         pts = [(r["lon"], r["lat"]) for r in rows if r.get("lat") is not None]
@@ -582,87 +842,87 @@ def activity_charts(series: dict, workdir: Path) -> list[tuple[str, Path]]:
         ax.plot([p[0] for p in pts], [p[1] for p in pts], color=SERIES[0])
         ax.set_aspect(1 / math.cos(math.radians(pts[0][1])))
         ax.set_xticks([]), ax.set_yticks([])
-        ax.set_title("Route shape")
-        charts.append(("Route shape (GPS)", _save(fig, workdir / "route.png")))
+        _title(ax, L("c_route"))
+        charts.append((L("c_route_caption"), _save(fig, workdir / "route.png")))
     return charts
 
 
-def wellness_charts(series: dict, workdir: Path) -> list[tuple[str, Path]]:
-    plt = _plt()
+def wellness_charts(series: dict, workdir: Path, L: Labels, fonts) -> list[tuple[str, Path]]:
+    plt = _plt(fonts)
     days = series["days"]
     xs = [dt.date.fromisoformat(d["date"]) for d in days]
     many = len(days) > 10
-    import matplotlib.dates as mdates
-
     period = (series["from"] - dt.timedelta(days=0.6), series["to"] + dt.timedelta(days=0.6))
 
     def fmt(ax):
         ax.set_xlim(*period)
         if many:                                   # month: a handful of dates, sized to the panel width
-            wide = ax.get_position().width > 0.6
-            ax.xaxis.set_major_locator(mdates.AutoDateLocator(minticks=3, maxticks=8 if wide else 4))
-            ax.xaxis.set_major_formatter(mdates.DateFormatter("%d %b"))
+            _date_axis(ax, L, "chart_date", maxticks=8 if ax.get_position().width > 0.6 else 4)
         else:
-            ax.xaxis.set_major_locator(mdates.DayLocator())
-            ax.xaxis.set_major_formatter(mdates.DateFormatter("%a %d"))
-        ax.tick_params(axis="x", labelsize=7)
+            _date_axis(ax, L, "chart_weekday")
     charts = []
     width = 0.7
 
     fig, ax = plt.subplots(figsize=(7.2, 2.4))
     bottom = [0.0] * len(days)
-    for (key, label), color in zip((("deep_min", "Deep"), ("light_min", "Light"), ("rem_min", "REM"), ("awake_min", "Awake")), SERIES):
+    for (key, label), color in zip((("deep_min", L("s_deep")), ("light_min", L("s_light")), ("rem_min", L("s_rem")),
+                                    ("awake_min", L("s_awake"))), SERIES):
         vals = [(d.get(key) or 0) / 60 for d in days]
         ax.bar(xs, vals, bottom=bottom, color=color, width=width, label=label, edgecolor=SURFACE, linewidth=1.2)
         bottom = [b + v for b, v in zip(bottom, vals)]
     need = [(d.get("sleep_need_min") or 0) / 60 or None for d in days]
     if any(need):
-        ax.plot(xs, need, "_", color=INK, markersize=12, markeredgewidth=1.5, label="Sleep need")
-    ax.set_title("Sleep per night (hours, by stage)")
+        ax.plot(xs, need, "_", color=INK, markersize=12, markeredgewidth=1.5, label=L("s_need"))
+    _title(ax, L("c_sleep"))
     ax.legend(frameon=False, fontsize=7, ncol=5, loc="upper left", bbox_to_anchor=(0, -0.18))
     fmt(ax)
-    charts.append(("Sleep and its stages", _save(fig, workdir / "sleep.png")))
+    charts.append((L("c_sleep_caption"), _save(fig, workdir / "sleep.png")))
 
     fig, axes = plt.subplots(1, 2, figsize=(7.2, 2.1))
-    _line(axes[0], xs, [d.get("sleep_score") for d in days], "Sleep score", "0-100")
+    _line(axes[0], xs, [d.get("sleep_score") for d in days], L("c_score"), "0-100", L)
     axes[0].plot([x for x, d in zip(xs, days) if d.get("sleep_score") is not None],
                  [d["sleep_score"] for d in days if d.get("sleep_score") is not None], "o", color=SERIES[0], markersize=3)
     lows = [d.get("hrv_low") for d in days]
     highs = [d.get("hrv_high") for d in days]
     if any(lows) and any(highs):
-        axes[1].fill_between(xs, [l or float("nan") for l in lows], [h or float("nan") for h in highs], color=SERIES[0], alpha=0.12, lw=0, label="balanced range")
-    _line(axes[1], xs, [d.get("hrv_ms") for d in days], "Overnight HRV", "ms, RMSSD")
-    axes[1].plot([x for x, d in zip(xs, days) if d.get("hrv_ms") is not None], [d["hrv_ms"] for d in days if d.get("hrv_ms") is not None], "o", color=SERIES[0], markersize=3)
+        axes[1].fill_between(xs, [l or float("nan") for l in lows], [h or float("nan") for h in highs], color=SERIES[0],
+                             alpha=0.12, lw=0, label=L("balanced"))
+    _line(axes[1], xs, [d.get("hrv_ms") for d in days], L("c_hrv"), L("u_hrv"), L)
+    axes[1].plot([x for x, d in zip(xs, days) if d.get("hrv_ms") is not None],
+                 [d["hrv_ms"] for d in days if d.get("hrv_ms") is not None], "o", color=SERIES[0], markersize=3)
     if any(lows):
         axes[1].legend(frameon=False, fontsize=7, loc="lower left")
     for ax in axes:
         fmt(ax)
-    charts.append(("Sleep score and overnight HRV", _save(fig, workdir / "score_hrv.png")))
+    charts.append((L("c_score_hrv_caption"), _save(fig, workdir / "score_hrv.png")))
 
     fig, axes = plt.subplots(1, 2, figsize=(7.2, 2.1))
-    _line(axes[0], xs, [d.get("resting_hr") for d in days], "Resting heart rate", "bpm")
-    axes[0].plot([x for x, d in zip(xs, days) if d.get("resting_hr")], [d["resting_hr"] for d in days if d.get("resting_hr")], "o", color=SERIES[0], markersize=3)
+    _line(axes[0], xs, [d.get("resting_hr") for d in days], L("c_rhr"), "bpm", L)
+    axes[0].plot([x for x, d in zip(xs, days) if d.get("resting_hr")], [d["resting_hr"] for d in days if d.get("resting_hr")],
+                 "o", color=SERIES[0], markersize=3)
     axes[1].bar(xs, [d.get("stress_avg") or 0 for d in days], color=SERIES[0], width=width, edgecolor=SURFACE, linewidth=1.2)
-    axes[1].set_title("Average stress (0-100)")
+    _title(axes[1], L("c_stress"))
     for ax in axes:
         fmt(ax)
-    charts.append(("Resting heart rate and stress", _save(fig, workdir / "rhr_stress.png")))
+    charts.append((L("c_rhr_stress_caption"), _save(fig, workdir / "rhr_stress.png")))
 
     fig, axes = plt.subplots(1, 2, figsize=(7.2, 2.1))
     lo = [d.get("bb_min") for d in days]
     hi = [d.get("bb_max") for d in days]
-    axes[0].bar(xs, [(h or 0) - (l or 0) for h, l in zip(hi, lo)], bottom=[l or 0 for l in lo], color=SERIES[0], width=width, edgecolor=SURFACE, linewidth=1.2)
+    axes[0].bar(xs, [(h or 0) - (l or 0) for h, l in zip(hi, lo)], bottom=[l or 0 for l in lo], color=SERIES[0],
+                width=width, edgecolor=SURFACE, linewidth=1.2)
     axes[0].set_ylim(0, 100)
-    axes[0].set_title("Body Battery, daily low to high (0-100)")
-    axes[1].bar(xs, [d.get("steps") or 0 for d in days], color=SERIES[0], width=width, edgecolor=SURFACE, linewidth=1.2, label="Steps")
+    _title(axes[0], L("c_bb"))
+    axes[1].bar(xs, [d.get("steps") or 0 for d in days], color=SERIES[0], width=width, edgecolor=SURFACE, linewidth=1.2,
+                label=L("c_steps"))
     goals = [d.get("step_goal") for d in days]
     if any(goals):
-        axes[1].plot(xs, [g or float("nan") for g in goals], "_", color=INK, markersize=10, markeredgewidth=1.5, label="Goal")
+        axes[1].plot(xs, [g or float("nan") for g in goals], "_", color=INK, markersize=10, markeredgewidth=1.5, label=L("goal"))
         axes[1].legend(frameon=False, fontsize=7, ncol=2, loc="upper left", bbox_to_anchor=(0, -0.22))
-    axes[1].set_title("Steps")
+    _title(axes[1], L("c_steps"))
     for ax in axes:
         fmt(ax)
-    charts.append(("Body Battery and steps", _save(fig, workdir / "bb_steps.png")))
+    charts.append((L("c_bb_steps_caption"), _save(fig, workdir / "bb_steps.png")))
 
     per_day = {d["date"]: 0.0 for d in days}
     for w in series["workouts"]:
@@ -670,13 +930,12 @@ def wellness_charts(series: dict, workdir: Path) -> list[tuple[str, Path]]:
             per_day[w["start"][:10]] += w.get("minutes") or 0
     fig, ax = plt.subplots(figsize=(7.2, 1.8))
     ax.bar(xs, list(per_day.values()), color=SERIES[0], width=width, edgecolor=SURFACE, linewidth=1.2)
-    ax.set_title("Workout minutes per day")
+    _title(ax, L("c_workout_min"))
     if not any(per_day.values()):
         ax.set_ylim(0, 60)
-        ax.text(0.5, 0.5, "no workouts recorded in this period", ha="center", va="center", color=MUTED,
-                transform=ax.transAxes)
+        ax.text(0.5, 0.5, L("no_workouts"), ha="center", va="center", color=MUTED, transform=ax.transAxes)
     fmt(ax)
-    charts.append(("Training", _save(fig, workdir / "training.png")))
+    charts.append((L("c_training_caption"), _save(fig, workdir / "training.png")))
     return charts
 
 
@@ -696,32 +955,45 @@ def load_narrative(path: str) -> dict:
     for k in ("evaluation", "recommendations"):
         if not isinstance(n[k], list):
             fail(f"narrative.{k} must be a list of strings")
+    if "data_notes" in n and not isinstance(n["data_notes"], list):
+        fail("narrative.data_notes must be a list of strings")
+    if "labels" in n and not isinstance(n["labels"], dict):
+        fail("narrative.labels must be an object of label key -> text (see: garmin_report.py labels)")
     return n
 
 
 def build_pdf(out: Path, title: str, subtitle: str, tiles: list[tuple[str, str]], narrative: dict,
-              charts: list[tuple[str, Path]], tables: list[tuple[str, list[list]]], notes: list[str]) -> None:
+              charts: list[tuple[str, Path]], tables: list[tuple[str, list[list]]], notes: list[str],
+              L: Labels, fonts: tuple[Path, Path]) -> None:
     try:
         from reportlab.lib import colors
         from reportlab.lib.pagesizes import A4
         from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
         from reportlab.lib.units import mm
+        from reportlab.pdfbase import pdfmetrics
+        from reportlab.pdfbase.ttfonts import TTFont
         from reportlab.platypus import (Image, KeepTogether, ListFlowable, ListItem, Paragraph, SimpleDocTemplate,
                                         Spacer, Table, TableStyle)
     except ImportError:
         fail(DEPS_HINT)
     from xml.sax.saxutils import escape
 
+    pdfmetrics.registerFont(TTFont("Body", str(fonts[0])))
+    pdfmetrics.registerFont(TTFont("Body-Bold", str(fonts[1])))
+    pdfmetrics.registerFontFamily("Body", normal="Body", bold="Body-Bold", italic="Body", boldItalic="Body-Bold")
+    regular, bold = "Body", "Body-Bold"
+
     ss = getSampleStyleSheet()
-    base = ParagraphStyle("base", parent=ss["Normal"], fontName="Helvetica", fontSize=9.5, leading=13.5, textColor=colors.HexColor(INK))
-    h1 = ParagraphStyle("h1", parent=base, fontName="Helvetica-Bold", fontSize=18, leading=22, spaceAfter=2)
+    base = ParagraphStyle("base", parent=ss["Normal"], fontName=regular, fontSize=9.5, leading=13.5, textColor=colors.HexColor(INK))
+    h1 = ParagraphStyle("h1", parent=base, fontName=bold, fontSize=18, leading=23, spaceAfter=2)
     sub = ParagraphStyle("sub", parent=base, fontSize=9, textColor=colors.HexColor(INK2), spaceAfter=10)
-    h2 = ParagraphStyle("h2", parent=base, fontName="Helvetica-Bold", fontSize=12, leading=16, spaceBefore=12, spaceAfter=5)
-    lead = ParagraphStyle("lead", parent=base, fontName="Helvetica-Bold", fontSize=10.5, leading=14.5, spaceAfter=4)
+    h2 = ParagraphStyle("h2", parent=base, fontName=bold, fontSize=12, leading=16, spaceBefore=12, spaceAfter=5)
+    lead = ParagraphStyle("lead", parent=base, fontName=bold, fontSize=10.5, leading=14.5, spaceAfter=4)
     cap = ParagraphStyle("cap", parent=base, fontSize=8, textColor=colors.HexColor(INK2), spaceAfter=8)
     small = ParagraphStyle("small", parent=base, fontSize=7.5, leading=10, textColor=colors.HexColor(INK2))
-    tile_v = ParagraphStyle("tv", parent=base, fontName="Helvetica-Bold", fontSize=13, leading=16)
-    tile_l = ParagraphStyle("tl", parent=base, fontSize=7.5, leading=9, textColor=colors.HexColor(INK2))
+    small_b = ParagraphStyle("small_b", parent=small, fontName=bold, textColor=colors.HexColor(INK))
+    tile_v = ParagraphStyle("tv", parent=base, fontName=bold, fontSize=13, leading=16)
+    tile_l = ParagraphStyle("tl", parent=base, fontSize=7.5, leading=9.5, textColor=colors.HexColor(INK2))
     p = lambda text, style=base: Paragraph(escape(str(text)), style)
 
     story = [p(title, h1), p(subtitle, sub)]
@@ -734,11 +1006,11 @@ def build_pdf(out: Path, title: str, subtitle: str, tiles: list[tuple[str, str]]
                             ("LINEBELOW", (0, 0), (-1, -1), 3, colors.white), ("LINEAFTER", (0, 0), (-1, -1), 3, colors.white),
                             ("VALIGN", (0, 0), (-1, -1), "TOP"), ("TOPPADDING", (0, 0), (-1, -1), 6),
                             ("BOTTOMPADDING", (0, 0), (-1, -1), 6), ("LEFTPADDING", (0, 0), (-1, -1), 7)]))
-    story += [tt, Spacer(1, 6), p("Summary", h2), p(narrative["headline"], lead), p(narrative["summary"])]
+    story += [tt, Spacer(1, 6), p(L("summary"), h2), p(narrative["headline"], lead), p(narrative["summary"])]
 
-    story.append(p("Details", h2))
+    story.append(p(L("details"), h2))
+    from reportlab.lib.utils import ImageReader
     for caption, path in charts:
-        from reportlab.lib.utils import ImageReader
         w, h = ImageReader(str(path)).getSize()
         width = 174 * mm if w / h > 1.5 else 90 * mm
         story.append(KeepTogether([Image(str(path), width=width, height=width * h / w), p(caption, cap)]))
@@ -746,116 +1018,147 @@ def build_pdf(out: Path, title: str, subtitle: str, tiles: list[tuple[str, str]]
     for caption, rows in tables:
         if len(rows) < 2:
             continue
-        data = [[p(c, small) for c in r] for r in rows]
+        data = [[p(c, small_b) for c in rows[0]]] + [[p(c, small) for c in r] for r in rows[1:]]
         t = Table(data, repeatRows=1, hAlign="LEFT")
         t.setStyle(TableStyle([("LINEBELOW", (0, 0), (-1, 0), 0.8, colors.HexColor(INK2)),
-                               ("LINEBELOW", (0, 1), (-1, -1), 0.3, colors.HexColor(GRID)),
-                               ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"), ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                               ("LINEBELOW", (0, 1), (-1, -1), 0.3, colors.HexColor(GRID)), ("VALIGN", (0, 0), (-1, -1), "TOP"),
                                ("TOPPADDING", (0, 0), (-1, -1), 2), ("BOTTOMPADDING", (0, 0), (-1, -1), 2)]))
         story += [KeepTogether([p(caption, h2), t])]
 
     bullet = lambda items: ListFlowable([ListItem(p(i), leftIndent=10, value="•") for i in items],
-                                        bulletType="bullet", start="•", leftIndent=12, bulletFontSize=8)
-    story += [p("Evaluation", h2), bullet(narrative["evaluation"]),
-              p("Recommendations", h2), bullet(narrative["recommendations"]),
-              p("Data notes", h2)] + [p(n, small) for n in notes + [
-                  "This report describes patterns in wearable data. It is not medical advice; see a clinician for symptoms or concerns."]]
+                                        bulletType="bullet", start="•", leftIndent=12, bulletFontSize=8,
+                                        bulletFontName=regular)
+    story += [p(L("evaluation"), h2), bullet(narrative["evaluation"]),
+              p(L("recommendations"), h2), bullet(narrative["recommendations"]),
+              p(L("data_notes"), h2)] + [p(n, small) for n in notes + [L("disclaimer")]]
 
     def footer(canvas, doc):
         canvas.saveState()
-        canvas.setFont("Helvetica", 7)
+        canvas.setFont(regular, 7)
         canvas.setFillColor(colors.HexColor(MUTED))
-        canvas.drawString(18 * mm, 10 * mm, f"garmin-archive report - generated {dt.datetime.now().strftime('%Y-%m-%d %H:%M')}")
-        canvas.drawRightString(A4[0] - 18 * mm, 10 * mm, f"page {doc.page}")
+        canvas.drawString(18 * mm, 10 * mm, L("footer", when=dt.datetime.now().strftime("%Y-%m-%d %H:%M")))
+        canvas.drawRightString(A4[0] - 18 * mm, 10 * mm, L("page", n=doc.page))
         canvas.restoreState()
 
     out.parent.mkdir(parents=True, exist_ok=True)
     doc = SimpleDocTemplate(str(out), pagesize=A4, leftMargin=18 * mm, rightMargin=18 * mm, topMargin=16 * mm,
-                            bottomMargin=16 * mm, title=title, author="garmin-archive", subject=subtitle)
+                            bottomMargin=16 * mm, title=title, author="garmin-archive", subject=subtitle,
+                            lang=L.language)
     doc.build(story, onFirstPage=footer, onLaterPages=footer)
     os.chmod(out, 0o600)
 
 
 # --------------------------------------------------------------------------
-# Command line
+# Rendering
 # --------------------------------------------------------------------------
 
 
-def fmt_day(iso: str) -> str:
-    return dt.datetime.fromisoformat(iso).strftime("%a %d %b %Y, %H:%M")
+def prepare(narrative: dict, font: str | None, font_bold: str | None) -> tuple[Labels, tuple[Path, Path], list[str]]:
+    L = Labels(narrative.get("language", "en"), narrative.get("labels"))
+    if L.fallback:
+        print(f"garmin_report: no built-in labels for language {L.language!r}; {len(L.fallback)} label(s) stay in English "
+              f"(e.g. {', '.join(L.fallback[:5])}). Translate them into narrative.labels (see: garmin_report.py labels).",
+              file=sys.stderr)
+    fonts = font_files(font, font_bold)
+    text = " ".join([narrative["headline"], narrative["summary"], *narrative["evaluation"], *narrative["recommendations"],
+                     *narrative.get("data_notes", []), L.all_text()])
+    for f in set(fonts):
+        check_font_covers(f, text)
+    return L, fonts, narrative.get("data_notes") or []
 
 
-def render_activity(facts: dict, series: dict, narrative: dict, out: Path) -> None:
+def render_activity(facts: dict, series: dict, narrative: dict, out: Path, font=None, font_bold=None) -> None:
     import tempfile
+    L, fonts, notes = prepare(narrative, font, font_bold)
     s = facts["summary"]
+    dash = L.n
     with tempfile.TemporaryDirectory() as tmp:
-        charts = activity_charts(series, Path(tmp))
-        tiles = [("distance", f"{s['distance_km']} km"), ("moving time", s["moving"]), ("average pace", s["avg_pace"] or "-"),
-                 ("average / max HR", f"{s['avg_hr']} / {s['max_hr']} bpm"),
-                 ("aerobic / anaerobic TE", f"{s['aerobic_training_effect']} / {s['anaerobic_training_effect']}"),
-                 ("training load", str(s["training_load"])), ("calories", f"{s['calories_kcal']} kcal"),
-                 ("avg / normalized power", f"{s['avg_power_w']} / {s['normalized_power_w']} W" if s.get("avg_power_w") else "-")]
-        splits = [["km", "time", "pace", "avg HR", "max HR", "cadence", "power", "elev. +"]] + [
-            [x["km"], dur_text(x["time_s"]), pace_text(x["pace_min_per_km"]), x["avg_hr"], x["max_hr"], x["avg_cadence"],
-             x["avg_power_w"], x["elevation_gain_m"]] for x in facts["splits_km"]]
-        laps = [["lap", "start", "distance", "time", "avg HR", "max HR", "avg power"]] + [
-            [l["lap"], (l.get("start") or "")[11:19], f"{(l.get('total_distance') or 0) / 1000:.2f} km", dur_text(l.get("total_timer_time")),
-             l.get("avg_heart_rate"), l.get("max_heart_rate"), l.get("avg_power")] for l in facts["laps"]]
+        charts = activity_charts(series, Path(tmp), L, fonts)
+        tiles = [(L("t_distance"), dash(s["distance_km"], " km")), (L("t_moving"), s["moving"]), (L("t_pace"), s["avg_pace"] or "-"),
+                 (L("t_hr"), f"{dash(s['avg_hr'])} / {dash(s['max_hr'])} bpm"),
+                 (L("t_te"), f"{dash(s['aerobic_training_effect'])} / {dash(s['anaerobic_training_effect'])}"),
+                 (L("t_load"), dash(s["training_load"])), (L("t_calories"), dash(s["calories_kcal"], " kcal")),
+                 (L("t_power"), f"{dash(s['avg_power_w'])} / {dash(s['normalized_power_w'])} W" if s.get("avg_power_w") else "-")]
+        splits = [[L("h_km"), L("h_time"), L("h_pace"), L("h_avg_hr"), L("h_max_hr"), L("h_cadence"), L("h_power"), L("h_elev")]] + [
+            [x["km"], dur_text(x["time_s"]), pace_text(x["pace_min_per_km"]), dash(x["avg_hr"]), dash(x["max_hr"]),
+             dash(x["avg_cadence"]), dash(x["avg_power_w"]), dash(x["elevation_gain_m"])] for x in facts["splits_km"]]
+        laps = [[L("h_lap"), L("h_start"), L("h_distance"), L("h_time"), L("h_avg_hr"), L("h_max_hr"), L("h_avg_power")]] + [
+            [l["lap"], (l.get("start") or "")[11:19], dash(round((l.get("total_distance") or 0) / 1000, 2), " km"),
+             dur_text(l.get("total_timer_time")), dash(l.get("avg_heart_rate")), dash(l.get("max_heart_rate")),
+             dash(l.get("avg_power"))] for l in facts["laps"]]
         r = facts["readiness_that_morning"]
         dec = facts["aerobic_decoupling"] or {}
-        details = [["measure", "value"],
-                   ["elapsed time", s["elapsed"]], ["elevation gain / loss", f"{s['elevation_gain_m']} / {s['elevation_loss_m']} m"],
-                   ["average cadence", f"{s['avg_cadence_spm']} steps/min" if s.get("avg_cadence_spm") else "-"],
-                   ["ground contact / vertical ratio / step length",
-                    f"{s['avg_ground_contact_ms']} ms / {s['avg_vertical_ratio_pct']} % / {s['avg_step_length_m']} m"],
-                   ["primary benefit", s.get("training_effect_label") or "-"],
-                   ["aerobic decoupling (after 5 min)", f"{dec.get('decoupling_pct')} %" if dec else "-"],
-                   ["pace variability (30 s, CV)", f"{facts['variability']['pace_cv_pct_30s']} %"],
-                   ["stamina start / end", " / ".join(f"{v}%" for v in s["stamina_start_end_pct"] if v is not None) or "-"],
-                   ["Body Battery change", s.get("body_battery_change")],
-                   ["feel / RPE", f"{s.get('feel_0_100')} / {s.get('rpe_10_100')}"],
-                   ["sweat loss (estimate)", f"{s['sweat_loss_ml']} ml" if s.get("sweat_loss_ml") else "-"],
-                   ["that morning: sleep / score", f"{r['sleep_min']} min / {r['sleep_score']}"],
-                   ["that morning: HRV / status", f"{r['hrv_ms']} ms / {r['hrv_status']}"],
-                   ["that morning: resting HR / Body Battery max", f"{r['resting_hr']} bpm / {r['body_battery_max']}"]]
-        build_pdf(out, f"Activity report: {str(facts['type']).replace('_', ' ').capitalize()}, {fmt_day(facts['start'])}",
-                  f"{facts['start'][:16].replace('T', ' ')} to {facts['end'][11:16]} ({facts['start'][19:]}) - Garmin activity {facts['activity']}",
+        details = [[L("h_measure"), L("h_value")],
+                   [L("m_elapsed"), s["elapsed"]], [L("m_elev"), f"{dash(s['elevation_gain_m'])} / {dash(s['elevation_loss_m'])} m"],
+                   [L("m_cadence"), dash(s.get("avg_cadence_spm"), " " + L("u_spm"))],
+                   [L("m_dynamics"), f"{dash(s['avg_ground_contact_ms'], ' ms')} / {dash(s['avg_vertical_ratio_pct'], ' %')} / {dash(s['avg_step_length_m'], ' m')}"],
+                   [L("m_benefit"), L.value("benefit", s.get("training_effect_label"))],
+                   [L("m_decoupling"), dash(dec.get("decoupling_pct"), " %")],
+                   [L("m_pace_cv"), dash(facts["variability"]["pace_cv_pct_30s"], " %")],
+                   [L("m_stamina"), " / ".join(dash(v, "%") for v in s["stamina_start_end_pct"] if v is not None) or "-"],
+                   [L("m_bb"), dash(s.get("body_battery_change"))],
+                   [L("m_feel"), f"{dash(s.get('feel_0_100'))} / {dash(s.get('rpe_10_100'))}"],
+                   [L("m_sweat"), dash(s.get("sweat_loss_ml"), " ml")],
+                   [L("m_sleep"), f"{L.hm(r['sleep_min'])} / {dash(r['sleep_score'])}"],
+                   [L("m_hrv"), f"{dash(r['hrv_ms'], ' ms')} / {L.value('status', r['hrv_status'])}"],
+                   [L("m_rhr"), f"{dash(r['resting_hr'], ' bpm')} / {dash(r['body_battery_max'])}"]]
+        start = dt.datetime.fromisoformat(facts["start"])
+        build_pdf(out, L("activity_title", type=L.value("type", facts["type"]), when=L.date(start, "long_date")),
+                  L("activity_subtitle", start=facts["start"][:16].replace("T", " "), end=facts["end"][11:16],
+                    offset=facts["start"][19:], id=facts["activity"]),
                   tiles, narrative, charts,
-                  [("Splits per kilometre", splits), ("Laps (as recorded by the watch)", laps), ("More measures", details)],
-                  facts["data_notes"])
+                  [(L("tb_splits"), splits), (L("tb_laps"), laps), (L("tb_more"), details)],
+                  notes or facts["data_notes"], L, fonts)
 
 
-def render_wellness(facts: dict, series: dict, narrative: dict, out: Path) -> None:
+def period_label(facts: dict, L: Labels) -> str:
+    kind, value = (facts.get("period") or {}).get("kind"), (facts.get("period") or {}).get("value")
+    if kind == "week":
+        return L("p_week", value=value)
+    if kind == "month":
+        year, month = (int(x) for x in value.split("-"))
+        return L("p_month", month=L.table["months_long"][month - 1], year=year)
+    return L("p_range", start=facts["from"], end=facts["to"])
+
+
+def render_wellness(facts: dict, series: dict, narrative: dict, out: Path, font=None, font_bold=None) -> None:
     import tempfile
+    L, fonts, notes = prepare(narrative, font, font_bold)
     s, d = facts["summary"], facts["change_vs_previous_avg"]
-    sign = lambda v, unit="": "" if v is None else f" ({'+' if v >= 0 else ''}{v}{unit} vs previous)"
-    hm = lambda m: "-" if m is None else f"{int(m // 60)}h {int(m % 60):02d}m"
+    sign = lambda v, unit="": "" if v is None else " " + L("vs_prev", delta=("+" if v >= 0 else "") + L.n(v, unit))
+    dash = L.n
     with tempfile.TemporaryDirectory() as tmp:
-        charts = wellness_charts(series, Path(tmp))
-        num_or_dash = lambda v, unit="": "-" if v is None else f"{v}{unit}"
-        tiles = [("average sleep" + sign(d["sleep_min"], " min"), hm(s["sleep_min"]["avg"])),
-                 ("average sleep score" + sign(d["sleep_score"]), num_or_dash(s["sleep_score"]["avg"])),
-                 ("average overnight HRV" + sign(d["hrv_ms"], " ms"), num_or_dash(s["hrv_ms"]["avg"], " ms")),
-                 ("average resting HR" + sign(d["resting_hr"], " bpm"), num_or_dash(s["resting_hr"]["avg"], " bpm")),
-                 ("average stress" + sign(d["stress_avg"]), num_or_dash(s["stress_avg"]["avg"])),
-                 ("average Body Battery high" + sign(d["bb_max"]), num_or_dash(s["bb_max"]["avg"])),
-                 ("steps per day" + sign(d["steps"]), "-" if s["steps"]["avg"] is None else f"{round(s['steps']['avg']):,}"),
-                 ("workouts / intensity minutes", f"{s['workouts']['count']} / {s['intensity_minutes_total']}")]
-        dash = lambda v: "-" if v is None else v
+        charts = wellness_charts(series, Path(tmp), L, fonts)
+        tiles = [(L("w_sleep") + sign(d["sleep_min"], " min"), L.hm(s["sleep_min"]["avg"])),
+                 (L("w_score") + sign(d["sleep_score"]), dash(s["sleep_score"]["avg"])),
+                 (L("w_hrv") + sign(d["hrv_ms"], " ms"), dash(s["hrv_ms"]["avg"], " ms")),
+                 (L("w_rhr") + sign(d["resting_hr"], " bpm"), dash(s["resting_hr"]["avg"], " bpm")),
+                 (L("w_stress") + sign(d["stress_avg"]), dash(s["stress_avg"]["avg"])),
+                 (L("w_bb") + sign(d["bb_max"]), dash(s["bb_max"]["avg"])),
+                 (L("w_steps") + sign(d["steps"]), "-" if s["steps"]["avg"] is None else L.n(round(s["steps"]["avg"]))),
+                 (L("w_workouts"), f"{s['workouts']['count']} / {L.n(s['intensity_minutes_total'])}")]
         today = (facts.get("coverage") or {}).get("today_partial")
-        daily = [["date", "sleep", "score", "HRV", "RHR", "stress", "BB low-high", "steps"]] + [
-            [x["date"][5:] + (" (today, partial)" if x["date"] == today else ""), hm(x["sleep_min"]), dash(x["sleep_score"]),
-             f"{x['hrv_ms']} ({(x['hrv_status'] or '').lower()})" if x["hrv_ms"] else "-",
+        daily = [[L("h_date"), L("h_sleep"), L("h_score"), L("h_hrv"), L("h_rhr"), L("h_stress"), L("h_bb"), L("h_steps")]] + [
+            [L.date(dt.date.fromisoformat(x["date"]), "chart_date") + (f" ({L('today_partial')})" if x["date"] == today else ""),
+             L.hm(x["sleep_min"]), dash(x["sleep_score"]),
+             f"{L.n(x['hrv_ms'])} ({L.value('status', x['hrv_status'])})" if x["hrv_ms"] else "-",
              dash(x["resting_hr"]), dash(x["stress_avg"]),
              f"{dash(x['bb_min'])}-{x['bb_max']}" if x["bb_max"] is not None else "-",
-             f"{x['steps']:,}" if x["steps"] is not None else "-"]
+             L.n(x["steps"])]
             for x in facts["days"] if not today or x["date"] <= today]
-        workouts = [["date", "type", "minutes", "distance", "avg HR"]] + [
-            [w["start"][:16].replace("T", " "), w["type"], w["minutes"], f"{(w['distance_m'] or 0) / 1000:.2f} km", w["avg_hr"]]
-            for w in facts["workouts"]]
-        build_pdf(out, f"Wellness report: {facts['label']}" + (" (in progress)" if facts.get("in_progress") else ""),
-                  f"{facts['from']} to {facts['to']} - compared with {facts['previous_period']['from']} to {facts['previous_period']['to']}",
-                  tiles, narrative, charts, [("Day by day", daily), ("Workouts", workouts)], facts["data_notes"])
+        workouts = [[L("h_date"), L("h_type"), L("h_minutes"), L("h_distance"), L("h_avg_hr")]] + [
+            [w["start"][:16].replace("T", " "), L.value("type", w["type"]), dash(w["minutes"]),
+             L.n(round((w["distance_m"] or 0) / 1000, 2), " km"), dash(w["avg_hr"])] for w in facts["workouts"]]
+        build_pdf(out, L("wellness_title", label=period_label(facts, L)) + (f" {L('in_progress')}" if facts.get("in_progress") else ""),
+                  L("wellness_subtitle", start=facts["from"], end=facts["to"], pstart=facts["previous_period"]["from"],
+                    pend=facts["previous_period"]["to"]),
+                  tiles, narrative, charts, [(L("tb_daily"), daily), (L("tb_workouts"), workouts)],
+                  notes or facts["data_notes"], L, fonts)
+
+
+# --------------------------------------------------------------------------
+# Command line
+# --------------------------------------------------------------------------
 
 
 def main(argv: list[str]) -> int:
@@ -875,14 +1178,22 @@ def main(argv: list[str]) -> int:
         g.add_argument("--facts", metavar="FILE", help="write the computed facts as JSON (step 1)")
         g.add_argument("--narrative", metavar="FILE", help="render the PDF with this narrative (step 2)")
         s.add_argument("--out", help="PDF path (default: data/reports/...)")
+        s.add_argument("--font", help="TrueType font for the report language (default: DejaVu Sans from matplotlib)")
+        s.add_argument("--font-bold", help="bold TrueType font (default: the bold DejaVu Sans, or --font)")
+    lb = sub.add_parser("labels", help="print every label as JSON, to translate into narrative.labels")
+    lb.add_argument("--lang", default="en", help="start from this built-in language (en, vi)")
     args = parser.parse_args(argv)
 
+    if args.kind == "labels":
+        print(json.dumps(Labels(args.lang).table, indent=1, ensure_ascii=False))
+        return 0
     if args.kind == "activity":
         facts, series = activity_facts(args.activity, route=args.route)
         default = REPORT_DIR / f"activity-{facts['activity']}.pdf"
     else:
-        start, end, label = period_from_args(args)
+        start, end, label, period = period_from_args(args)
         facts, series = wellness_facts(start, end, label)
+        facts["period"] = period
         tag = args.week or args.month or f"{start}_{end}"
         default = REPORT_DIR / f"wellness-{tag}.pdf"
 
@@ -892,7 +1203,7 @@ def main(argv: list[str]) -> int:
         return 0
     narrative = load_narrative(args.narrative)
     out = Path(args.out) if args.out else default
-    (render_activity if args.kind == "activity" else render_wellness)(facts, series, narrative, out)
+    (render_activity if args.kind == "activity" else render_wellness)(facts, series, narrative, out, args.font, args.font_bold)
     print(f"report written to {out}")
     return 0
 

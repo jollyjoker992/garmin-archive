@@ -81,6 +81,29 @@ class ReportTests(unittest.TestCase):
         self.assertEqual(a["steps"]["avg"], 6000.0)                  # not dragged down by the morning's 1,500
         self.assertEqual(a["sleep_min"]["avg"], 410.0)                # last night's sleep still counts
 
+    def test_vietnamese_labels_numbers_and_dates(self):
+        L = gr.Labels("vi")
+        self.assertEqual(L.fallback, [])                               # Vietnamese is complete
+        self.assertEqual(L("summary"), "Tóm tắt")
+        self.assertEqual(L.n(4174.7), "4.174,7")
+        self.assertEqual(L.n(2633), "2.633")
+        self.assertEqual(L.n(None), "-")
+        self.assertEqual(L.hm(376), "6h16")
+        self.assertEqual(L.date(dt.date(2026, 11, 2), "chart_weekday"), "T2 02")
+        self.assertEqual(L.date(dt.datetime(2026, 9, 30, 18, 20), "long_date"), "Thứ Tư, 30/09/2026, 18:20")
+        self.assertEqual(L.value("status", "UNBALANCED"), "mất cân bằng")
+        self.assertEqual(L.value("type", "open_water_swimming"), "Open water swimming")   # unknown: prettified
+
+    def test_english_defaults_and_other_languages(self):
+        en = gr.Labels()
+        self.assertEqual((en.n(4174.7), en.hm(376), en.date(dt.date(2026, 11, 2), "chart_weekday")),
+                         ("4,174.7", "6h 16m", "Mon 02"))
+        ja = gr.Labels("ja", {"summary": "概要"})
+        self.assertEqual(ja("summary"), "概要")
+        self.assertIn("details", ja.fallback)
+        self.assertNotIn("summary", ja.fallback)
+        self.assertEqual(set(gr.LABELS_VI) - set(gr.LABELS_EN), set())   # no stray Vietnamese keys
+
     def test_narrative_is_required_and_checked(self):
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "n.json"
