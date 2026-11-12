@@ -70,6 +70,17 @@ class ReportTests(unittest.TestCase):
         self.assertEqual(a["hrv_status_counts"], {"BALANCED": 1, "LOW": 1})
         self.assertEqual(a["workouts"], {"count": 1, "minutes": 30, "distance_km": 5.0})
 
+    def test_partial_today_is_left_out_of_accumulating_averages(self):
+        today = dt.date(2026, 11, 12)
+        days = [{"date": "2026-11-11", "steps": 6000, "sleep_min": 400, "stress_avg": 30},
+                {"date": "2026-11-12", "steps": 1500, "sleep_min": 420, "stress_avg": 20}]
+        cleaned = gr.without_partial_today(days, today)
+        self.assertEqual(cleaned[0], days[0])
+        self.assertEqual((cleaned[1]["steps"], cleaned[1]["stress_avg"], cleaned[1]["sleep_min"]), (None, None, 420))
+        a = gr.aggregate([{**d, **{k: d.get(k) for k in ("sleep_score", "hrv_ms")}} for d in cleaned], [])
+        self.assertEqual(a["steps"]["avg"], 6000.0)                  # not dragged down by the morning's 1,500
+        self.assertEqual(a["sleep_min"]["avg"], 410.0)                # last night's sleep still counts
+
     def test_narrative_is_required_and_checked(self):
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "n.json"

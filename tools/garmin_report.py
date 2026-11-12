@@ -355,6 +355,22 @@ def wellness_days(start: dt.date, end: dt.date) -> list[dict]:
     return out
 
 
+# Values that keep growing during the day; today's are partial and stay out of averages.
+ACCUMULATING = ("steps", "stress_avg", "bb_min", "bb_drained", "bb_charged", "moderate_min", "vigorous_min",
+                "calories_total", "calories_active", "spo2_avg", "respiration_avg")
+
+
+def without_partial_today(days: list[dict], today: dt.date) -> list[dict]:
+    return [{**d, **{k: None for k in ACCUMULATING}} if d["date"] == today.isoformat() else d for d in days]
+
+
+def account_offset() -> str:
+    """The account's UTC offset, from the most recent daily Observation."""
+    res = ma.graphql('{ ObservationList(code: "http://loinc.org|41950-7", _sort: "-date", _count: 1) { effectivePeriod { start } } }')
+    obs = res["data"]["ObservationList"]
+    return obs[0]["effectivePeriod"]["start"][19:] if obs else "+00:00"
+
+
 def aggregate(days: list[dict], workouts: list[dict]) -> dict:
     col = lambda k: [d[k] for d in days if d.get(k) is not None]
     stat = lambda k: {"avg": rnd(mean(col(k))), "min": min(col(k)) if col(k) else None,
@@ -377,17 +393,21 @@ def aggregate(days: list[dict], workouts: list[dict]) -> dict:
 
 def wellness_facts(start: dt.date, end: dt.date, label: str) -> tuple[dict, dict]:
     days = wellness_days(start, end)
-    offset = next((x for x in [None] if x), None)
-    sample = observations_by_key([f"{days[-1]['date']}/steps", f"{days[0]['date']}/steps"])
-    starts = [o["effectivePeriod"]["start"] for o in sample.values() if o.get("effectivePeriod")]
-    offset = starts[0][19:] if starts else "+00:00"
+    offset = account_offset()
     iso = lambda d: f"{d.isoformat()}T00:00:00{offset}"
+    today = dt.date.today()
     workouts = ma.list_workouts(iso(start), iso(end + dt.timedelta(days=1)))
     length = (end - start).days + 1
     prev_start, prev_end = start - dt.timedelta(days=length), start - dt.timedelta(days=1)
     prev_days = wellness_days(prev_start, prev_end)
     prev_workouts = ma.list_workouts(iso(prev_start), iso(start))
-    this, prev = aggregate(days, workouts), aggregate(prev_days, prev_workouts)
+    this = aggregate(without_partial_today(days, today), workouts)
+    prev = aggregate(without_partial_today(prev_days, today), prev_workouts)
+    with_data = [d["date"] for d in days if any(d.get(k) is not None for k in ("sleep_min", "steps", "resting_hr"))]
+    future = [d["date"] for d in days if d["date"] > today.isoformat()]
+    coverage = {"days_in_period": len(days), "days_with_data": len(with_data),
+                "first_day_with_data": with_data[0] if with_data else None,
+                "today_partial": today.isoformat() if start <= today <= end else None, "future_days": len(future)}
     delta = {}
     for k in ("sleep_min", "sleep_score", "hrv_ms", "resting_hr", "stress_avg", "bb_max", "steps"):
         a, b = this[k]["avg"], prev[k]["avg"]
@@ -397,6 +417,7 @@ def wellness_facts(start: dt.date, end: dt.date, label: str) -> tuple[dict, dict
     today = dt.date.today()
     facts = {
         "kind": "wellness", "label": label, "from": start.isoformat(), "to": end.isoformat(), "utc_offset": offset,
+        "in_progress": end >= today, "coverage": coverage,
         "summary": this, "previous_period": {"from": prev_start.isoformat(), "to": prev_end.isoformat(), **prev},
         "change_vs_previous_avg": delta,
         "best_and_worst": {
@@ -411,9 +432,16 @@ def wellness_facts(start: dt.date, end: dt.date, label: str) -> tuple[dict, dict
             "HRV is RMSSD compared with the personal baseline (hrv_low..hrv_high), not population norms.",
             "Stress, Body Battery and sleep score are Garmin's own 0-100 scales.",
             "Intensity minutes = moderate + 2 x vigorous (Garmin's rule; WHO suggests 150 per week).",
-        ] + ([f"Days from {max(start, today - dt.timedelta(days=1))} on may still change (watch sync)."] if end >= today - dt.timedelta(days=1) else []),
+        ] + ([f"Days from {max(start, today - dt.timedelta(days=1))} on may still change (watch sync)."] if end >= today - dt.timedelta(days=1) else [])
+          + ([f"The period is still in progress: {coverage['days_with_data']} of {len(days)} days have data. Today ({today}) "
+              "counts for last night's sleep, HRV and resting heart rate; its steps, stress, Body Battery low, intensity "
+              "minutes and calories are partial and left out of the averages."] if coverage["today_partial"] else [])
+          + ([f"Data starts on {coverage['first_day_with_data']}; earlier days of the period have no data."]
+             if coverage["first_day_with_data"] and coverage["first_day_with_data"] > start.isoformat() else [])
+          + (["The previous period has no data, so there is no comparison."] if not prev["sleep_min"]["days_with_data"]
+             and not prev["steps"]["days_with_data"] else []),
     }
-    return facts, {"days": days, "workouts": workouts}
+    return facts, {"days": days, "workouts": workouts, "from": start, "to": end}
 
 
 # --------------------------------------------------------------------------
@@ -566,7 +594,10 @@ def wellness_charts(series: dict, workdir: Path) -> list[tuple[str, Path]]:
     many = len(days) > 10
     import matplotlib.dates as mdates
 
+    period = (series["from"] - dt.timedelta(days=0.6), series["to"] + dt.timedelta(days=0.6))
+
     def fmt(ax):
+        ax.set_xlim(*period)
         if many:                                   # month: a handful of dates, sized to the panel width
             wide = ax.get_position().width > 0.6
             ax.xaxis.set_major_locator(mdates.AutoDateLocator(minticks=3, maxticks=8 if wide else 4))
@@ -801,22 +832,28 @@ def render_wellness(facts: dict, series: dict, narrative: dict, out: Path) -> No
     hm = lambda m: "-" if m is None else f"{int(m // 60)}h {int(m % 60):02d}m"
     with tempfile.TemporaryDirectory() as tmp:
         charts = wellness_charts(series, Path(tmp))
+        num_or_dash = lambda v, unit="": "-" if v is None else f"{v}{unit}"
         tiles = [("average sleep" + sign(d["sleep_min"], " min"), hm(s["sleep_min"]["avg"])),
-                 ("average sleep score" + sign(d["sleep_score"]), str(s["sleep_score"]["avg"])),
-                 ("average overnight HRV" + sign(d["hrv_ms"], " ms"), f"{s['hrv_ms']['avg']} ms"),
-                 ("average resting HR" + sign(d["resting_hr"], " bpm"), f"{s['resting_hr']['avg']} bpm"),
-                 ("average stress" + sign(d["stress_avg"]), str(s["stress_avg"]["avg"])),
-                 ("average Body Battery high" + sign(d["bb_max"]), str(s["bb_max"]["avg"])),
-                 ("steps per day" + sign(d["steps"]), f"{round(s['steps']['avg'] or 0):,}"),
+                 ("average sleep score" + sign(d["sleep_score"]), num_or_dash(s["sleep_score"]["avg"])),
+                 ("average overnight HRV" + sign(d["hrv_ms"], " ms"), num_or_dash(s["hrv_ms"]["avg"], " ms")),
+                 ("average resting HR" + sign(d["resting_hr"], " bpm"), num_or_dash(s["resting_hr"]["avg"], " bpm")),
+                 ("average stress" + sign(d["stress_avg"]), num_or_dash(s["stress_avg"]["avg"])),
+                 ("average Body Battery high" + sign(d["bb_max"]), num_or_dash(s["bb_max"]["avg"])),
+                 ("steps per day" + sign(d["steps"]), "-" if s["steps"]["avg"] is None else f"{round(s['steps']['avg']):,}"),
                  ("workouts / intensity minutes", f"{s['workouts']['count']} / {s['intensity_minutes_total']}")]
+        dash = lambda v: "-" if v is None else v
+        today = (facts.get("coverage") or {}).get("today_partial")
         daily = [["date", "sleep", "score", "HRV", "RHR", "stress", "BB low-high", "steps"]] + [
-            [x["date"][5:], hm(x["sleep_min"]), x["sleep_score"], f"{x['hrv_ms']} ({(x['hrv_status'] or '').lower()})" if x["hrv_ms"] else "-",
-             x["resting_hr"], x["stress_avg"], f"{x['bb_min']}-{x['bb_max']}" if x["bb_max"] is not None else "-",
-             f"{x['steps']:,}" if x["steps"] is not None else "-"] for x in facts["days"]]
+            [x["date"][5:] + (" (today, partial)" if x["date"] == today else ""), hm(x["sleep_min"]), dash(x["sleep_score"]),
+             f"{x['hrv_ms']} ({(x['hrv_status'] or '').lower()})" if x["hrv_ms"] else "-",
+             dash(x["resting_hr"]), dash(x["stress_avg"]),
+             f"{dash(x['bb_min'])}-{x['bb_max']}" if x["bb_max"] is not None else "-",
+             f"{x['steps']:,}" if x["steps"] is not None else "-"]
+            for x in facts["days"] if not today or x["date"] <= today]
         workouts = [["date", "type", "minutes", "distance", "avg HR"]] + [
             [w["start"][:16].replace("T", " "), w["type"], w["minutes"], f"{(w['distance_m'] or 0) / 1000:.2f} km", w["avg_hr"]]
             for w in facts["workouts"]]
-        build_pdf(out, f"Wellness report: {facts['label']}",
+        build_pdf(out, f"Wellness report: {facts['label']}" + (" (in progress)" if facts.get("in_progress") else ""),
                   f"{facts['from']} to {facts['to']} - compared with {facts['previous_period']['from']} to {facts['previous_period']['to']}",
                   tiles, narrative, charts, [("Day by day", daily), ("Workouts", workouts)], facts["data_notes"])
 
