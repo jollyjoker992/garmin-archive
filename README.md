@@ -47,6 +47,10 @@ To enable uploads, install rclone, create the two remotes
 `GARMIN_GDRIVE_REMOTE` and/or `GARMIN_S3_REMOTE`. Then schedule a daily run
 ([docs/operations.md](docs/operations.md#scheduling)).
 
+Uploads are not encrypted by default. To keep only ciphertext in the cloud, run
+`python3 garmin_archive.py encrypt init` and follow
+[docs/operations.md](docs/operations.md#encrypting-the-cloud-copy-optional).
+
 ## What a run does
 
 0. **Sync with the cloud.** If upload targets are configured, reads
@@ -123,6 +127,7 @@ All settings are environment variables. A `.env` file next to the script (or
 | `GARMIN_GDRIVE_REMOTE` | unset | rclone destination, for example `gdrive:Backups/garmin`. |
 | `GARMIN_S3_REMOTE` | unset | rclone destination, for example `s3garmin:my-bucket/garmin`. |
 | `GARMIN_S3_STORAGE_CLASS` | `GLACIER` | Storage class for archives on S3. |
+| `GARMIN_REQUIRE_ENCRYPTION` | `false` | `true`: refuse to upload (exit 2) unless every target is an encrypted rclone crypt remote. See [encrypting the cloud copy](docs/operations.md#encrypting-the-cloud-copy-optional). |
 | `GARMIN_SETTLE_DAYS` | `2` | Age in days at which a crawled day is final. |
 | `GARMIN_REFETCH_MAX_AGE_DAYS` | `90` | `--refetch` of an archived day older than this is refused without `--allow-old-refetch` (Garmin keeps intraday detail about four months). |
 | `GARMIN_INCLUDE_TODAY` | `false` | Also fetch today, as provisional. Gives last night's sleep, HRV and Body Battery the same morning (Garmin dates sleep by the morning it ends). Today is never final, archived or uploaded. |

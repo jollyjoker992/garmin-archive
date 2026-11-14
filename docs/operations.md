@@ -97,6 +97,52 @@ only matters if you use `--refetch` on a day that is already uploaded.
 A day without an activity compresses to about 10 KB; a day with a run is about
 100 KB. A year is in the range of 10 to 30 MB.
 
+### Encrypting the cloud copy (optional)
+
+By default the archives and `manifest.json` are uploaded as they are, readable
+by the storage provider and by anyone who gets into the account. To store only
+ciphertext there, turn on encryption. It uses rclone's
+[crypt](https://rclone.org/crypt/) remote (XSalsa20-Poly1305, file and folder
+names encrypted too); the tool adds no cryptography of its own. The local data
+directory stays unencrypted.
+
+```sh
+python3 garmin_archive.py encrypt init
+```
+
+This creates a random 256-bit key and one crypt remote per configured target
+(`garmin-gdrive-crypt`, `garmin-s3-crypt`) in rclone's configuration file. The
+encrypted files go to a new folder next to the plain one (for example
+`gdrive:Backups/garmin-encrypted`; choose another with
+`--wrap gdrive=REMOTE:PATH`). The command prints the key once.
+
+1. **Save the key** in a password manager or on paper. It is also stored in
+   `rclone.conf`, only obscured, so protect that file like the cloud
+   credentials in it. If you lose both, the cloud copy cannot be read.
+2. Put the lines the command prints into `.env`:
+
+   ```sh
+   GARMIN_GDRIVE_REMOTE=garmin-gdrive-crypt:
+   GARMIN_S3_REMOTE=garmin-s3-crypt:
+   GARMIN_REQUIRE_ENCRYPTION=true
+   ```
+
+   With `GARMIN_REQUIRE_ENCRYPTION=true` a run exits 2 and uploads nothing
+   when a target is not a crypt remote.
+3. Run `python3 garmin_archive.py run`. Every archive is uploaded again,
+   encrypted, from the local `archives/` folder (nothing is fetched from
+   Garmin). `status` then shows `Encrypted gdrive: yes`.
+4. Test a restore (see "Restore" below) before deleting anything.
+5. Delete the old plain folders yourself: `rclone purge gdrive:Backups/garmin`
+   and the same for S3. On Google Drive also empty the trash
+   (`rclone cleanup gdrive:`). On S3, objects younger than the minimum storage
+   time of their class are charged for the rest of it, and a bucket with
+   versioning keeps the old versions until they are deleted too.
+
+The provider still sees the number of files and their approximate sizes.
+Changing the key later means a new `encrypt init` into a new folder and a full
+upload again.
+
 ### Check the targets
 
 ```sh
@@ -195,6 +241,28 @@ rclone copy s3garmin:my-bucket/garmin/archives/2026 ./restore/2026
 tar xzf restore/2026/2026-09-30.tar.gz        # gives ./2026-09-30/
 shasum -a 256 restore/2026/2026-09-30.tar.gz  # compare with archive.sha256 in the manifest
 ```
+
+With an encrypted copy, use the crypt remote in the same commands
+(`rclone copy garmin-gdrive-crypt:archives/2026 ./restore/2026`); rclone
+decrypts while downloading. For S3 Glacier, send the restore request to the
+underlying remote (`rclone backend restore s3garmin:my-bucket/garmin-encrypted ...`).
+
+On a machine that does not have the crypt remotes, recreate them from the saved
+key. Set the plain locations in `.env` as they were before encryption
+(`GARMIN_GDRIVE_REMOTE=gdrive:Backups/garmin`), then:
+
+```sh
+python3 garmin_archive.py encrypt recover     # asks for the key, checks it against manifest.json
+```
+
+Then switch `.env` to the crypt remotes as above and run `restore`. Without
+this tool, the same remote is made with `rclone config` (new remote, type
+`crypt`, remote `gdrive:Backups/garmin-encrypted`, the key as password, no
+second password). Two checks matter there: with a wrong key rclone lists and
+copies nothing and still exits 0, so an empty result means a wrong key; and
+rclone does not notice an archive cut short at a 64 KiB boundary, so compare
+each archive's `shasum -a 256` with `archive.sha256` in the manifest (`restore`
+does this itself).
 
 ## New machine, or lost data folder
 

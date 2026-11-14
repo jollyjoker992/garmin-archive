@@ -4,9 +4,13 @@
 Supports `copyto SRC DST [flags]`, `copy SRC DST --files-from LIST` and `lsjson --recursive --files-only DIR`,
 with rclone's exit code 3 for a missing directory or file (as the real rclone
 returns on the local backend; the tool also accepts 4).
+`config dump`, `config file`, `obscure -` and `lsf DIR` work on the INI file
+named by $RCLONE_CONFIG; a `name:path` argument whose section has type crypt
+resolves to `<its remote>/path` (nothing is really encrypted).
 Every call is appended to $FAKE_RCLONE_LOG. $FAKE_RCLONE_FAIL=1 makes every
 call fail with exit code 1.
 """
+import configparser
 import json
 import os
 import shutil
@@ -22,6 +26,28 @@ if os.environ.get("FAKE_RCLONE_FAIL"):
     print("ERROR : simulated failure", file=sys.stderr)
     sys.exit(1)
 
+conf = configparser.ConfigParser()
+if os.environ.get("RCLONE_CONFIG"):
+    conf.read(os.environ["RCLONE_CONFIG"])
+
+
+def resolve(arg):
+    name, sep, rest = arg.partition(":")
+    if sep and conf.has_section(name) and conf[name].get("type") == "crypt":
+        return str(Path(conf[name]["remote"]) / rest)
+    return arg
+
+
+if args[0] == "config":
+    if args[1] == "dump":
+        print(json.dumps({name: dict(conf[name]) for name in conf.sections()}))
+    elif args[1] == "file":
+        print("Configuration file is stored at:\n" + os.environ["RCLONE_CONFIG"])
+    sys.exit(0)
+if args[0] == "obscure":
+    print("obscured-" + sys.stdin.read().strip()[::-1])
+    sys.exit(0)
+
 positional = []
 skip = False
 for a in args[1:]:
@@ -30,9 +56,9 @@ for a in args[1:]:
         continue
     if a.startswith("--"):
         skip = a in ("--retries", "--low-level-retries", "--s3-storage-class", "--files-from",
-                     "--transfers", "--checkers")
+                     "--transfers", "--checkers", "--max-depth")
         continue
-    positional.append(a)
+    positional.append(resolve(a))
 
 if args[0] == "copyto":
     src, dst = Path(positional[0]), Path(positional[1])
@@ -60,5 +86,10 @@ elif args[0] == "lsjson":
         sys.exit(3)
     print(json.dumps([{"Path": str(p.relative_to(root)), "Size": p.stat().st_size}
                       for p in sorted(root.rglob("*")) if p.is_file()]))
+elif args[0] == "lsf":
+    root = Path(positional[0])
+    if not root.is_dir():
+        sys.exit(3)
+    print("\n".join(sorted(p.name + ("/" if p.is_dir() else "") for p in root.iterdir())))
 else:
     sys.exit(f"fake rclone: unsupported command {args[0]}")

@@ -14,6 +14,10 @@ repository. Do not open a public issue for it.
   on every push and pull request.
 - The Garmin key is used only with Garmin's official Personal API; no account
   password is ever handled.
+- The cloud copy can be encrypted with rclone crypt (optional, off by default;
+  `docs/operations.md`). The key is generated from the system's random source,
+  passed to rclone on standard input, never on a command line, and stored only
+  in rclone's configuration file, which the tool rewrites with mode 600.
 - Agents get a read-only Medplum client; the local Medplum stack listens on
   127.0.0.1 only.
 

@@ -16,6 +16,7 @@ import argparse
 import base64
 import datetime as dt
 import fcntl
+import getpass
 import gzip
 import hashlib
 import http.client
@@ -24,6 +25,7 @@ import logging
 import logging.handlers
 import os
 import random
+import secrets
 import shutil
 import subprocess
 import sys
@@ -166,6 +168,7 @@ class Config:
     s3_remote: str
     s3_storage_class: str
     rclone_bin: str
+    require_encryption: bool
     base_url: str
     log_level: str
     today: dt.date = field(default_factory=dt.date.today)
@@ -201,6 +204,7 @@ class Config:
             s3_remote=_env("GARMIN_S3_REMOTE").rstrip("/"),
             s3_storage_class=_env("GARMIN_S3_STORAGE_CLASS", "GLACIER"),
             rclone_bin=_env("GARMIN_RCLONE_BIN", "rclone"),
+            require_encryption=_env("GARMIN_REQUIRE_ENCRYPTION", "false").lower() in ("1", "true", "yes"),
             base_url=_env("GARMIN_BASE_URL", "https://personal.connectapi.garmin.com").rstrip("/"),
             log_level=_env("GARMIN_LOG_LEVEL", "INFO").upper(),
             today=today,
@@ -636,11 +640,16 @@ def _rclone_error(result: subprocess.CompletedProcess) -> str:
     return f"rclone exited {result.returncode}: {' | '.join(tail)}"
 
 
+def rjoin(remote: str, rel: str) -> str:
+    """Path of ``rel`` under an rclone remote; a bare ``name:`` takes no slash."""
+    return f"{remote}{rel}" if remote.endswith(":") else f"{remote}/{rel}"
+
+
 def fetch_remote_manifest(cfg: Config, target: str, remote: str) -> dict | None:
     """The manifest.json stored on a target, or None if there is none yet."""
     tmp = cfg.data_dir / f".remote-manifest-{target}.json"
     tmp.unlink(missing_ok=True)
-    result = _rclone(cfg, "copyto", f"{remote}/manifest.json", str(tmp))
+    result = _rclone(cfg, "copyto", rjoin(remote, "manifest.json"), str(tmp))
     if result.returncode in (RCLONE_DIR_NOT_FOUND, RCLONE_FILE_NOT_FOUND):
         return None
     if result.returncode != 0:
@@ -660,7 +669,7 @@ def fetch_remote_manifest(cfg: Config, target: str, remote: str) -> dict | None:
 
 def list_remote_archives(cfg: Config, remote: str) -> dict[str, int]:
     """{'archives/YYYY/YYYY-MM-DD.tar.gz': size} for every archive on a target."""
-    result = _rclone(cfg, "lsjson", "--recursive", "--files-only", f"{remote}/archives")
+    result = _rclone(cfg, "lsjson", "--recursive", "--files-only", rjoin(remote, "archives"))
     if result.returncode == RCLONE_DIR_NOT_FOUND:
         return {}
     if result.returncode != 0:
@@ -811,7 +820,7 @@ def upload_pending(cfg: Config, manifest: dict) -> tuple[int, int]:
             archive = entry.get("archive")
             if entry.get("status") != "final" or not archive:
                 continue
-            dest = f"{remote}/{archive['file']}"
+            dest = rjoin(remote, archive["file"])
             done = (entry.get("uploads") or {}).get(target)
             if done and done.get("sha256") == archive["sha256"] and done.get("remote") == dest:
                 continue
@@ -836,7 +845,7 @@ def upload_pending(cfg: Config, manifest: dict) -> tuple[int, int]:
             done_now = 0
             for day, entry in local_batch:
                 if present.get(entry["archive"]["file"]) == entry["archive"]["bytes"]:
-                    _record_upload(cfg, entry, target, f"{remote}/{entry['archive']['file']}")
+                    _record_upload(cfg, entry, target, rjoin(remote, entry["archive"]["file"]))
                     done_now += 1
                 else:
                     failed += 1
@@ -849,7 +858,7 @@ def upload_pending(cfg: Config, manifest: dict) -> tuple[int, int]:
                 log.info("Uploaded %d archive(s) to %s", done_now, target)
 
         for day, entry, source in remote_sourced:
-            dest = f"{remote}/{entry['archive']['file']}"
+            dest = rjoin(remote, entry["archive"]["file"])
             try:
                 rclone_copy(cfg, target, source, dest)
             except (RuntimeError, subprocess.TimeoutExpired, OSError) as exc:
@@ -870,7 +879,7 @@ def upload_manifest(cfg: Config) -> int:
         return 0
     for target, remote in cfg.targets().items():
         try:
-            rclone_copy(cfg, target, cfg.manifest_path, f"{remote}/manifest.json", storage_class="STANDARD")
+            rclone_copy(cfg, target, cfg.manifest_path, rjoin(remote, "manifest.json"), storage_class="STANDARD")
         except (RuntimeError, subprocess.TimeoutExpired, OSError) as exc:
             failed += 1
             log.error("Upload of manifest.json to %s failed: %s", target, exc)
@@ -994,6 +1003,7 @@ def cmd_status(cfg: Config, args) -> int:
     manifest = load_manifest(cfg)
     start, end = resolve_range(cfg, args)
     summary = summarise(cfg, manifest, start, end)
+    summary["encryption"] = target_encryption(cfg)
     if args.json:
         print(json.dumps(summary, indent=1))
         return EXIT_OK
@@ -1008,6 +1018,8 @@ def cmd_status(cfg: Config, args) -> int:
         print(f"Pending {target:7}: {len(days)} ({compress_ranges(days)})")
     if not summary["pending_uploads"]:
         print("Uploads        : no target configured")
+    for target, encrypted in summary["encryption"].items():
+        print(f"Encrypted {target:5}: {'unknown (rclone config not readable)' if encrypted is None else 'yes' if encrypted else 'no'}")
     print(f"Only in cloud  : {len(summary['cloud_only'])} ({compress_ranges(summary['cloud_only'])})")
     for target, info in summary["remote_sync"].items():
         if info.get("error"):
@@ -1045,6 +1057,174 @@ def check_refetch_age(cfg: Config, manifest: dict, refetch: set[str], allowed: b
                     "Garmin no longer serves will be lost, here and on the upload targets", ", ".join(risky))
 
 
+# --------------------------------------------------------------------------
+# Optional encryption of the cloud copy (rclone crypt)
+# --------------------------------------------------------------------------
+
+CRYPT_REMOTES = {"gdrive": "garmin-gdrive-crypt", "s3": "garmin-s3-crypt"}
+
+
+def rclone_remote_types(cfg: Config) -> dict[str, str] | None:
+    """{remote name: backend type} from rclone's configuration (local, no
+    network). None when it cannot be read. The dump holds secrets: never print it."""
+    try:
+        result = subprocess.run([cfg.rclone_bin, "config", "dump"], capture_output=True, text=True, timeout=60)
+        dump = json.loads(result.stdout) if result.returncode == 0 else None
+    except (OSError, subprocess.TimeoutExpired, ValueError):
+        return None
+    if not isinstance(dump, dict):
+        return None
+    return {name: str((section or {}).get("type", "")) for name, section in dump.items()}
+
+
+def _remote_name(remote: str) -> str | None:
+    """The rclone remote name of ``name:path``; None for a local path."""
+    name, sep, _ = remote.partition(":")
+    return name if sep and "/" not in name else None
+
+
+def target_encryption(cfg: Config) -> dict[str, bool | None]:
+    """Per upload target: True if its rclone remote is a crypt remote, False if
+    not, None if rclone's configuration cannot be read."""
+    targets = cfg.targets()
+    if not targets:
+        return {}
+    types = rclone_remote_types(cfg)
+    out: dict[str, bool | None] = {}
+    for target, remote in targets.items():
+        name = _remote_name(remote)
+        if name is None:
+            out[target] = False
+        elif os.environ.get(f"RCLONE_CONFIG_{name.upper().replace('-', '_')}_TYPE"):
+            out[target] = os.environ[f"RCLONE_CONFIG_{name.upper().replace('-', '_')}_TYPE"] == "crypt"
+        else:
+            out[target] = None if types is None else types.get(name) == "crypt"
+    return out
+
+
+def encrypted_location(target: str, remote: str) -> str:
+    """Default folder for the encrypted copy: a sibling of the plain one."""
+    name = _remote_name(remote)
+    if name is None:
+        return f"{remote}-encrypted"
+    path = remote.partition(":")[2].strip("/")
+    if not path:
+        return f"{name}:garmin-archive-encrypted"
+    if target == "s3" and "/" not in path:           # only a bucket: stay inside it
+        return f"{name}:{path}/garmin-archive-encrypted"
+    return f"{name}:{path}-encrypted"
+
+
+def rclone_config_path(cfg: Config) -> Path:
+    result = subprocess.run([cfg.rclone_bin, "config", "file"], capture_output=True, text=True, timeout=60)
+    lines = [ln.strip() for ln in result.stdout.splitlines() if ln.strip()]
+    if result.returncode != 0 or not lines:
+        raise ConfigError("cannot find rclone's configuration file (`rclone config file` failed)")
+    return Path(lines[-1]).expanduser()
+
+
+def cmd_encrypt(cfg: Config, args) -> int:
+    """``init``: create a key and the crypt remotes. ``recover``: recreate the
+    crypt remotes from a saved key. The key never appears on a command line."""
+    targets = cfg.targets()
+    if not targets:
+        raise ConfigError("no upload target configured (GARMIN_GDRIVE_REMOTE / GARMIN_S3_REMOTE)")
+    if not shutil.which(cfg.rclone_bin):
+        raise ConfigError(f"rclone binary {cfg.rclone_bin!r} not found; install rclone or set GARMIN_RCLONE_BIN")
+    types = rclone_remote_types(cfg)
+    if types is None:
+        raise ConfigError("cannot read rclone's configuration (`rclone config dump` failed)")
+    wraps: dict[str, str] = {}
+    for item in args.wrap:
+        target, sep, location = item.partition("=")
+        if target not in targets or not sep or not location:
+            raise ConfigError(f"--wrap must be TARGET=REMOTE:PATH with TARGET one of {sorted(targets)}; got {item!r}")
+        wraps[target] = location.rstrip("/")
+
+    existing = sorted(name for target, name in CRYPT_REMOTES.items() if target in targets and name in types)
+    if args.action == "init" and existing:
+        raise ConfigError(f"rclone remote {', '.join(existing)} already exists, so a key was already created. "
+                          "To add a target with the same key use `encrypt recover`; to start over, first remove "
+                          "the remote with `rclone config delete` (its key is lost unless you saved it)")
+    plan: dict[str, tuple[str, str]] = {}            # target -> (crypt remote name, wrapped location)
+    for target, remote in targets.items():
+        name = CRYPT_REMOTES[target]
+        if name in types:
+            print(f"{target}: rclone remote {name} already exists; left as it is")
+            continue
+        if target in wraps:
+            location = wraps[target]
+        elif types.get(_remote_name(remote) or "") == "crypt" or _remote_name(remote) == name:
+            raise ConfigError(f"{target} is set to {remote}, which is (or should be) an encrypted remote; give the "
+                              f"plain location that holds the encrypted files with --wrap {target}=REMOTE:PATH")
+        else:
+            location = encrypted_location(target, remote)
+        plan[target] = (name, location)
+    if not plan:
+        print("Nothing to create.")
+        return EXIT_OK
+
+    if args.action == "init":
+        key = base64.b32encode(secrets.token_bytes(32)).decode().rstrip("=").lower()     # 256 bits
+    else:
+        key = (getpass.getpass("Encryption key: ") if sys.stdin.isatty() else sys.stdin.readline()).strip()
+        if not key or any(c.isspace() for c in key):
+            raise ConfigError("the encryption key is empty or contains spaces")
+    result = subprocess.run([cfg.rclone_bin, "obscure", "-"], input=key, capture_output=True, text=True, timeout=60)
+    obscured = result.stdout.strip()
+    if result.returncode != 0 or not obscured:
+        raise ConfigError("`rclone obscure` failed; rclone's configuration was not changed")
+
+    path = rclone_config_path(cfg)
+    path = path.resolve() if path.exists() else path
+    text = path.read_text() if path.exists() else ""
+    if "RCLONE_ENCRYPT_V0:" in text[:500]:
+        raise ConfigError(f"{path} is itself encrypted, so this command cannot add to it. Create the remote by hand: "
+                          "`rclone config`, new remote, type crypt (see docs/operations.md)")
+    if text and not text.endswith("\n"):
+        text += "\n"
+    for name, location in plan.values():
+        text += (f"\n[{name}]\ntype = crypt\nremote = {location}\npassword = {obscured}\n"
+                 "filename_encryption = standard\ndirectory_name_encryption = true\n")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_name(path.name + ".garmin-archive.tmp")
+    with os.fdopen(os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600), "w") as fh:
+        fh.write(text)
+    os.replace(tmp, path)
+    types = rclone_remote_types(cfg) or {}
+    broken = sorted(name for name, _ in plan.values() if types.get(name) != "crypt")
+    if broken:
+        raise ConfigError(f"wrote {path} but rclone does not list {', '.join(broken)} as a crypt remote; check the file")
+
+    print(f"Added to {path}:")
+    for target, (name, location) in plan.items():
+        print(f"  {target}: {name}:  ->  encrypted files in {location}")
+    if args.action == "init":
+        print("\nENCRYPTION KEY (shown only now):\n")
+        print(f"  {key}\n")
+        print("Save it in a password manager or on paper before going on. Without this key\n"
+              "and without this machine's rclone configuration, the cloud copy cannot be read.")
+    else:
+        for target, (name, _) in plan.items():
+            listing = _rclone(cfg, "lsf", f"{name}:", "--max-depth", "1", timeout=300)
+            if listing.returncode == 0 and "manifest.json" in listing.stdout.split():
+                print(f"{target}: key verified, manifest.json is readable")
+            else:
+                print(f"WARNING: {target}: no readable manifest.json in {name}: . Either the key is wrong (then run "
+                      f"`rclone config delete {name}` and recover again) or nothing was uploaded there yet.")
+    print("\nTo use the encrypted remotes, set in .env:")
+    for target, (name, _) in plan.items():
+        print(f"  GARMIN_{target.upper()}_REMOTE={name}:")
+    print("  GARMIN_REQUIRE_ENCRYPTION=true")
+    if args.action == "init":
+        print("\nThe next run uploads every archive again, encrypted. The plain copies already in\n"
+              "the cloud are not touched; delete them yourself once a restore from the encrypted\n"
+              "copy has worked (docs/operations.md).")
+    else:
+        print("\nThen run `restore` to download and unpack the days.")
+    return EXIT_OK
+
+
 def resolve_range(cfg: Config, args) -> tuple[dt.date, dt.date]:
     start = parse_date(args.start, "--from") if args.start else cfg.start_date
     last = cfg.today if cfg.include_today else cfg.today - dt.timedelta(days=1)
@@ -1065,6 +1245,11 @@ def cmd_run(cfg: Config, args) -> int:
         raise ConfigError(f"--refetch dates must be on or before {latest}")
     manifest = load_manifest(cfg)
     check_refetch_age(cfg, manifest, refetch, args.allow_old_refetch)
+    if cfg.require_encryption and not args.dry_run and not args.no_upload:
+        plain = sorted(t for t, encrypted in target_encryption(cfg).items() if not encrypted)
+        if plain:
+            raise ConfigError(f"GARMIN_REQUIRE_ENCRYPTION is set but {', '.join(plain)} is not an encrypted (crypt) "
+                              "rclone remote; nothing was uploaded. See `encrypt init` in docs/operations.md")
     sync_failures = 0
     if not args.dry_run and cfg.targets():
         sync_failures = sync_remote_state(cfg, manifest)
@@ -1243,13 +1428,20 @@ def build_parser() -> argparse.ArgumentParser:
     status = sub.add_parser("status", help="show what is fetched, missing and pending upload")
     add_range(status)
     status.add_argument("--json", action="store_true", help="machine-readable output")
+
+    encrypt = sub.add_parser("encrypt", help="optional: encrypt the cloud copy with rclone crypt")
+    encrypt.add_argument("action", choices=["init", "recover"],
+                         help="init: create a key and the encrypted remotes; recover: recreate them from a saved key")
+    encrypt.add_argument("--wrap", action="append", default=[], metavar="TARGET=REMOTE:PATH",
+                         help="where the encrypted files of a target (gdrive, s3) are stored "
+                              "(default: next to the plain copy, with -encrypted added)")
     return parser
 
 
 def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     argv = list(sys.argv[1:] if argv is None else argv)
-    if not any(a in ("run", "status", "restore") for a in argv) and not any(a in ("-h", "--help", "--version") for a in argv):
+    if not any(a in ("run", "status", "restore", "encrypt") for a in argv) and not any(a in ("-h", "--help", "--version") for a in argv):
         argv.append("run")
     args = parser.parse_args(argv)
     load_env_file(Path(args.env_file) if args.env_file else Path(__file__).resolve().parent / ".env")
@@ -1265,6 +1457,8 @@ def main(argv: list[str] | None = None) -> int:
             except BlockingIOError:
                 log.error("Another garmin-archive run holds %s; exiting", cfg.data_dir / ".lock")
                 return EXIT_LOCKED
+            if args.command == "encrypt":
+                return cmd_encrypt(cfg, args)
             return cmd_restore(cfg, args) if args.command == "restore" else cmd_run(cfg, args)
     except ConfigError as exc:
         print(f"Configuration error: {exc}", file=sys.stderr)

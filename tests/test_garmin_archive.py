@@ -324,6 +324,108 @@ class RunTests(Base):
         self.assertEqual(self.run_cli("restore", "--from", "2026-01-01", "--to", "2026-01-01"), 1)
         self.assertFalse((root / "days/2026/2026-01-01").exists())
 
+    def _encrypt(self, action, *extra, key=None):
+        import contextlib, io
+        out, stdin = io.StringIO(), sys.stdin
+        sys.stdin = io.StringIO((key or "") + "\n")
+        try:
+            with contextlib.redirect_stdout(out), contextlib.redirect_stderr(io.StringIO()):
+                code = self.run_cli("encrypt", action, *extra)
+        finally:
+            sys.stdin = stdin
+        return code, out.getvalue()
+
+    def _use_crypt_remotes(self):
+        os.environ.update(GARMIN_GDRIVE_REMOTE="garmin-gdrive-crypt:", GARMIN_S3_REMOTE="garmin-s3-crypt:",
+                          GARMIN_REQUIRE_ENCRYPTION="true")
+
+    def test_encrypt_init_creates_crypt_remotes_and_run_uses_them(self):
+        self.use_fake_rclone()
+        conf = Path(self.tmp.name) / "rclone.conf"
+        conf.write_text("[other]\ntype = drive\n")
+        os.environ["RCLONE_CONFIG"] = str(conf)
+        code, out = self._encrypt("init")
+        self.assertEqual(code, 0)
+        key = next(l.strip() for l in out.splitlines() if len(l.strip()) == 52 and " " not in l.strip())
+        self.assertEqual(len(set(key)) > 10, True)
+        text = conf.read_text()
+        self.assertIn("[other]", text)                               # existing remotes are kept
+        self.assertIn(f"[garmin-gdrive-crypt]\ntype = crypt\nremote = {self.gdrive}-encrypted\n", text)
+        self.assertIn(f"[garmin-s3-crypt]\ntype = crypt\nremote = {self.s3}-encrypted\n", text)
+        self.assertIn(f"password = obscured-{key[::-1]}", text)
+        self.assertNotIn(f"= {key}", text)
+        self.assertEqual(conf.stat().st_mode & 0o777, 0o600)
+        self.assertNotIn(key, self.calls.read_text())                # never on a command line
+        self.assertIn("GARMIN_GDRIVE_REMOTE=garmin-gdrive-crypt:", out)
+
+        self.assertEqual(self._encrypt("init")[0], 2)                # a second init must not make a second key
+        self.assertEqual(conf.read_text(), text)
+
+        self._use_crypt_remotes()
+        self.assertEqual(self.run_cli("run", "--from", "2026-01-01", "--to", "2026-01-01"), 0)
+        for remote in (self.gdrive, self.s3):
+            enc = remote.with_name(remote.name + "-encrypted")
+            self.assertTrue((enc / "archives/2026/2026-01-01.tar.gz").is_file())
+            self.assertTrue((enc / "manifest.json").is_file())
+            self.assertFalse(remote.exists())                        # nothing went to the plain location
+        uploads = self.manifest()["days"]["2026-01-01"]["uploads"]
+        self.assertEqual(uploads["gdrive"]["remote"], "garmin-gdrive-crypt:archives/2026/2026-01-01.tar.gz")
+        self.assertEqual(json.loads(self._status_json())["encryption"], {"gdrive": True, "s3": True})
+
+    def test_switching_to_encrypted_remotes_uploads_everything_again(self):
+        self.use_fake_rclone()
+        os.environ["RCLONE_CONFIG"] = str(Path(self.tmp.name) / "rclone.conf")
+        self.run_cli("run", "--from", "2026-01-01", "--to", "2026-01-02")
+        self.assertEqual(self._encrypt("init")[0], 0)
+        self._use_crypt_remotes()
+        self.assertEqual(self.run_cli("run", "--from", "2026-01-01", "--to", "2026-01-02"), 0)
+        for day in ("2026-01-01", "2026-01-02"):
+            self.assertTrue((Path(f"{self.gdrive}-encrypted") / f"archives/2026/{day}.tar.gz").is_file())
+            self.assertTrue((self.gdrive / f"archives/2026/{day}.tar.gz").is_file())   # plain copy is left alone
+        self.assertEqual(json.loads(self._status_json())["pending_uploads"], {"gdrive": [], "s3": []})
+
+    def test_require_encryption_refuses_a_plain_target(self):
+        self.use_fake_rclone()
+        os.environ.update(RCLONE_CONFIG=str(Path(self.tmp.name) / "rclone.conf"), GARMIN_REQUIRE_ENCRYPTION="true")
+        self.assertEqual(self.run_cli("run", "--from", "2026-01-01", "--to", "2026-01-01"), 2)
+        self.assertFalse(self.gdrive.exists() or self.s3.exists())
+        self.assertEqual(self.run_cli("run", "--no-upload", "--from", "2026-01-01", "--to", "2026-01-01"), 0)
+        self.assertEqual(json.loads(self._status_json())["encryption"], {"gdrive": False, "s3": False})
+
+    def test_encrypt_recover_recreates_remotes_and_restore_works(self):
+        self.use_fake_rclone()
+        conf = Path(self.tmp.name) / "rclone.conf"
+        os.environ["RCLONE_CONFIG"] = str(conf)
+        code, out = self._encrypt("init")
+        key = next(l.strip() for l in out.splitlines() if len(l.strip()) == 52 and " " not in l.strip())
+        created = conf.read_text()
+        self._use_crypt_remotes()
+        self.run_cli("run", "--from", "2026-01-01", "--to", "2026-01-01")
+
+        # New machine: no data, no crypt remotes, .env still has the plain locations.
+        conf.unlink()
+        for name in ("days", "archives", "manifest.json"):
+            path = Path(self.tmp.name) / name
+            shutil.rmtree(path) if path.is_dir() else path.unlink()
+        os.environ.update(GARMIN_GDRIVE_REMOTE=str(self.gdrive), GARMIN_S3_REMOTE=str(self.s3))
+        self.assertEqual(self._encrypt("recover", key="")[0], 2)     # no key given
+        code, out = self._encrypt("recover", key=key)
+        self.assertEqual(code, 0)
+        self.assertIn("gdrive: key verified", out)
+        self.assertNotIn(key, out)
+        self.assertEqual(conf.read_text().strip(), created.strip())
+        self._use_crypt_remotes()
+        self.assertEqual(self.run_cli("restore", "--from", "2026-01-01", "--to", "2026-01-01"), 0)
+        self.assertTrue((Path(self.tmp.name) / "days/2026/2026-01-01").is_dir())
+
+        # With .env already naming the crypt remotes, the plain location must be given.
+        conf.unlink()
+        self.assertEqual(self._encrypt("recover", key=key)[0], 2)
+        code, _ = self._encrypt("recover", "--wrap", f"gdrive={self.gdrive}-encrypted",
+                                "--wrap", f"s3={self.s3}-encrypted", key=key)
+        self.assertEqual(code, 0)
+        self.assertEqual(conf.read_text().strip(), created.strip())
+
     def _status_json(self):
         import contextlib, io
         out = io.StringIO()
@@ -405,6 +507,14 @@ class UnitTests(unittest.TestCase):
             self.assertTrue(ceiling / 2 <= delay <= ceiling, (attempt, delay))
         self.assertEqual(ga.backoff_delay(1, 2, 120, retry_after=45), 45)
         self.assertEqual(ga.backoff_delay(1, 2, 120, retry_after=99999), 900)
+
+    def test_remote_paths(self):
+        self.assertEqual(ga.rjoin("gdrive:Backups/garmin", "manifest.json"), "gdrive:Backups/garmin/manifest.json")
+        self.assertEqual(ga.rjoin("garmin-s3-crypt:", "archives"), "garmin-s3-crypt:archives")
+        self.assertEqual(ga.encrypted_location("gdrive", "gdrive:Backups/garmin"), "gdrive:Backups/garmin-encrypted")
+        self.assertEqual(ga.encrypted_location("s3", "s3garmin:bucket/garmin"), "s3garmin:bucket/garmin-encrypted")
+        self.assertEqual(ga.encrypted_location("s3", "s3garmin:bucket"), "s3garmin:bucket/garmin-archive-encrypted")
+        self.assertEqual(ga.encrypted_location("gdrive", "gdrive:"), "gdrive:garmin-archive-encrypted")
 
     def test_compress_ranges(self):
         self.assertEqual(ga.compress_ranges([]), "none")

@@ -22,7 +22,7 @@ at runtime.
 |---|---|---|
 | Garmin key, targets, Medplum clients | `env_file: .env` | The same `.env` as on the host. The compose file overrides the host-only values (`GARMIN_ARCHIVE_DIR`, `GARMIN_RCLONE_BIN`, `GARMIN_MEDPLUM_URL`). |
 | Data directory | `./data` mounted at `/data` | Raw archive, manifests, FHIR output, logs. Change with `GARMIN_DATA_DIR`. |
-| rclone config | `~/.config/rclone` mounted at `/config/rclone`, **writable** | rclone writes renewed Google Drive tokens back. Change with `RCLONE_CONFIG_DIR`. |
+| rclone config | `~/.config/rclone` mounted at `/config/rclone`, **writable** | rclone writes renewed Google Drive tokens back. Change with `RCLONE_CONFIG_DIR`. With encryption on, the crypt remotes and their key are in this file too. |
 | S3 credentials | `docker/secrets.env` | See below. |
 | Medplum | same compose project | Reached as `http://medplum-server:8103`. |
 

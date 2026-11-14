@@ -35,6 +35,7 @@ python3 -m unittest discover -s tests -v    # offline tests
  "never_fetched": ["2026-05-01"],
  "not_archived": [],
  "pending_uploads": {"gdrive": [], "s3": ["2026-11-08"]},
+ "encryption": {"gdrive": true, "s3": true},
  "local_bytes": 12345678,
  "last_run": {"finished_at": "...", "exit_code": 0, "days_crawled": 2, "days_failed": 0, "requests": 41}
 }
@@ -143,6 +144,13 @@ crawl on the host while the container's scheduler runs a job.
   in with the account password and get accounts rate-limited.
 - Uploading sends health data to external services. Only use the remotes the
   owner configured.
+- Encryption of the cloud copy is optional (rclone crypt, `docs/operations.md`).
+  `status` reports it per target (`encryption`: true, false, or null when
+  rclone's configuration cannot be read). Only the owner runs
+  `encrypt init` / `encrypt recover`: they print or ask for the key. Never
+  print the key, `rclone.conf` or the output of `rclone config dump` /
+  `rclone config show`, never run `rclone reveal`, never delete a crypt remote
+  and never unset `GARMIN_REQUIRE_ENCRYPTION`.
 - Never print or commit `medplum/.env` or the `GARMIN_MEDPLUM_*` secrets.
   `docker compose down -v` deletes all loaded data; ask first.
 
